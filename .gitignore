@@ -1,0 +1,12 @@
+.vercel/
+dist/
+node_modules/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+
+# Local credentials and development tools
+.aws/
+.agents/
+.codex/
