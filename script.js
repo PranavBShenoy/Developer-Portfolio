@@ -183,8 +183,9 @@
     state.introStarted = true;
     state.introTasks = INTRO_PLAN.map((plan, index) => {
       const target = document.querySelector(plan.target);
+      if (!target || getComputedStyle(target).display === 'none') return null;
       const rect = getRect(target);
-      if (!target || !rect) return null;
+      if (!rect) return null;
       const leadId = index < 4 ? index : 8 + (index - 4) * 2;
       const partnerId = index < 4 ? 4 + index : leadId + 1;
       const lead = state.agents[leadId] || state.agents[index % state.agents.length];
@@ -433,7 +434,7 @@
   }
 
   function revealTaskComplete(task, now) {
-    return task.revealItems.length === 0 || (task.revealItems.every(item => item.done) && now >= task.revealFinishAt && state.typeJobs.size === 0);
+    return task.revealItems.length === 0 || (task.revealItems.every(item => item.done) && now >= task.revealFinishAt);
   }
 
   function beginIntroMaterialization(task, now) {
@@ -464,17 +465,19 @@
 
   function startSectionObserver() {
     if (state.observer || state.fallbackScrollHandler) return;
+    const checkScrollSections = () => {
+      document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
+        if (section.dataset.buildSection === 'hero' || section.classList.contains('section-built') || section.classList.contains('section-building')) return;
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= innerHeight * 1.15 && rect.bottom >= -100) constructSection(section);
+      });
+    };
+    window.addEventListener('scroll', checkScrollSections, { passive: true });
+    window.addEventListener('resize', checkScrollSections);
+    checkScrollSections();
+
     if (!('IntersectionObserver' in window)) {
-      state.fallbackScrollHandler = () => {
-        document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
-          if (section.dataset.buildSection === 'hero' || section.classList.contains('section-built') || section.classList.contains('section-building')) return;
-          const rect = section.getBoundingClientRect();
-          if (rect.top < innerHeight * .86 && rect.bottom > 76) constructSection(section);
-        });
-      };
-      window.addEventListener('scroll', state.fallbackScrollHandler, { passive: true });
-      window.addEventListener('resize', state.fallbackScrollHandler);
-      state.fallbackScrollHandler();
+      state.fallbackScrollHandler = checkScrollSections;
       return;
     }
     state.observer = new IntersectionObserver(entries => {
@@ -484,7 +487,7 @@
         if (!section.classList.contains('section-built') && !section.classList.contains('section-building')) constructSection(section);
         state.observer.unobserve(section);
       });
-    }, { threshold: 0.14, rootMargin: '0px 0px -8% 0px' });
+    }, { threshold: 0.04, rootMargin: '180px 0px 180px 0px' });
     document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
       if (!['hero'].includes(section.dataset.buildSection) && !section.classList.contains('section-built')) state.observer.observe(section);
     });
@@ -492,7 +495,12 @@
 
   function constructSection(section) {
     if (!section || state.sectionBuilds.has(section) || section.classList.contains('section-built')) return;
-    const task = { kind: 'section', section, target: section, label: section.dataset.buildSection.toUpperCase(), color: palette[(state.sectionQueue.length + 4) % palette.length], status: 'queued', startAt: state.clock, revealItems: [], revealFinishAt: 0, lastScrollY: window.scrollY };
+    if (state.observer) {
+      try { state.observer.unobserve(section); } catch (_) {}
+    }
+    const raw = section.getBoundingClientRect();
+    const rect = getRect(section) || { x: 0, y: raw.top, w: Math.max(100, raw.width || innerWidth), h: Math.max(80, raw.height || 400) };
+    const task = { kind: 'section', section, target: section, rect, label: section.dataset.buildSection.toUpperCase(), color: palette[(state.sectionQueue.length + 4) % palette.length], status: 'queued', startAt: state.clock, revealItems: [], revealFinishAt: 0, lastScrollY: window.scrollY };
     section.classList.add('section-building');
     state.sectionBuilds.set(section, task);
     state.sectionQueue.push(task);
@@ -501,8 +509,7 @@
   }
 
   function startQueuedSections(now) {
-    let active = [...state.sectionBuilds.values()].filter(task => task.status !== 'queued' && task.status !== 'done').length;
-    while (active < 2 && state.sectionQueue.length) {
+    while (state.sectionQueue.length) {
       const task = state.sectionQueue.shift();
       if (!task || !task.section.isConnected || task.section.classList.contains('section-built')) {
         if (task) state.sectionBuilds.delete(task.section);
@@ -513,12 +520,13 @@
       const partnerId = pairIndex < 4 ? 4 + pairIndex : leadId + 1;
       task.lead = state.agents[leadId] || state.agents[0];
       task.partner = state.agents[partnerId] || state.agents[1];
-      task.startAt = now + active * 180;
-      task.moveDuration = state.reduced ? 80 : 520 + (pairIndex % 4) * 75;
-      task.dragDuration = state.reduced ? 100 : 540 + (pairIndex % 3) * 85;
-      task.confirmDuration = state.reduced ? 80 : 180;
+      task.startAt = now;
+      task.moveDuration = state.reduced ? 60 : 320 + (pairIndex % 4) * 50;
+      task.dragDuration = state.reduced ? 80 : 340 + (pairIndex % 3) * 60;
+      task.confirmDuration = state.reduced ? 60 : 120;
       task.status = 'scheduled';
-      active++;
+      startTaskRoute(task, now);
+      beginSectionMaterialization(task, now);
     }
   }
 
@@ -531,6 +539,7 @@
       if (element.closest('[data-build-section]:not(.section-built), [data-build-piece]:not(.piece-built)')) continue;
       const rect = getRect(element);
       if (!rect || rect.w < 12 || rect.h < 9) continue;
+      if (element.hasAttribute('data-build-section') && !element.matches('a,button') && (rect.w > innerWidth * 0.7 || rect.h > 360)) continue;
       const key = `${Math.round(rect.x / 12)}:${Math.round(rect.y / 12)}:${Math.round(rect.w / 20)}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -568,13 +577,16 @@
   }
 
   function drawFrame(box, color, progress, opacity = 1, settled = false) {
+    if (!box || !box.rect) return;
     const r = box.rect;
     const p = clamp(progress, 0, 1);
     const w = Math.max(2, r.w * p), h = Math.max(2, r.h * p);
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.fillStyle = 'rgba(59,130,246,0.08)';
-    ctx.fillRect(r.x, r.y, w, h);
+    if (r.w < innerWidth * 0.72 || r.h < 320) {
+      ctx.fillStyle = 'rgba(59,130,246,0.06)';
+      ctx.fillRect(r.x, r.y, w, h);
+    }
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.setLineDash(settled ? [] : [4, 4]);
@@ -676,6 +688,7 @@
   }
 
   function startTaskRoute(task, now) {
+    if (!task.lead || !task.partner) return false;
     let rect = getRect(task.target);
     if (!rect && task.kind === 'section' && task.target?.isConnected) {
       const raw = task.target.getBoundingClientRect();
@@ -699,6 +712,7 @@
   }
 
   function updateConstructionTask(task, now) {
+    if (task.kind === 'section' && task.status === 'queued') return;
     if ((task.status === 'queued' || task.status === 'scheduled') && now >= task.startAt && !startTaskRoute(task, now)) return;
     if (task.status === 'moving' || task.status === 'dragging' || task.status === 'confirming' || task.status === 'ready' || task.status === 'materializing') {
       const scrollDelta = window.scrollY - (task.lastScrollY ?? window.scrollY);
@@ -788,7 +802,9 @@
     const activeAgents = new Set();
     for (const task of tasks) {
       if (task.status === 'done' || task.status === 'queued' || task.status === 'scheduled') continue;
-      activeAgents.add(task.lead); activeAgents.add(task.partner);
+      if (!task.rect) continue;
+      if (task.lead) activeAgents.add(task.lead);
+      if (task.partner) activeAgents.add(task.partner);
       if (task.status === 'moving') {
         ctx.save(); ctx.globalAlpha = .7; ctx.strokeStyle = task.color; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(task.rect.x - 4, task.rect.y - 10); ctx.lineTo(task.rect.x - 4, task.rect.y - 4); ctx.lineTo(task.rect.x + 2, task.rect.y - 4); ctx.stroke();
@@ -804,12 +820,12 @@
           ctx.save(); ctx.globalAlpha = (1 - snap) * .65; ctx.strokeStyle = '#f4f1ea'; ctx.lineWidth = 1.2;
           ctx.strokeRect(task.rect.x - inset, task.rect.y - inset, task.rect.w + inset * 2, task.rect.h + inset * 2); ctx.restore();
         }
-        if (task.status === 'dragging') {
+        if (task.status === 'dragging' && task.lead && task.leadStart && task.leadEnd) {
           task.lead.x = task.leadStart.x + (task.leadEnd.x - task.leadStart.x) * p;
           task.lead.y = task.leadStart.y + (task.leadEnd.y - task.leadStart.y) * p;
         } else if (settled) {
-          task.lead.x = task.leadEnd.x; task.lead.y = task.leadEnd.y;
-          task.partner.x = task.partnerPoint.x; task.partner.y = task.partnerPoint.y;
+          if (task.lead && task.leadEnd) { task.lead.x = task.leadEnd.x; task.lead.y = task.leadEnd.y; }
+          if (task.partner && task.partnerPoint) { task.partner.x = task.partnerPoint.x; task.partner.y = task.partnerPoint.y; }
         }
       }
     }
@@ -1140,6 +1156,14 @@
         topbar.classList.remove('nav-open');
         menuToggle.setAttribute('aria-expanded', 'false');
         menuToggle.setAttribute('aria-label', 'Open navigation');
+        const hash = link.getAttribute('href');
+        if (hash && hash.startsWith('#')) {
+          const targetSection = document.querySelector(hash);
+          if (targetSection && targetSection.hasAttribute('data-build-section')) {
+            constructSection(targetSection);
+            startQueuedSections(state.clock);
+          }
+        }
       });
     });
     document.addEventListener('click', event => {
