@@ -21,6 +21,7 @@
   };
   /* DEV_ONLY_END:PROFILE_EDITOR */
   const reducePreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const isMobile = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   const palette = ['#ff4b36', '#58c8ff', '#b7e46d', '#ff91d4', '#ffd166', '#9e8bff', '#f7f3e8', '#ff8c42', '#45e0c0', '#f15bb5', '#a8dadc', '#e9ff70'];
   const callsigns = ['DESIGNER', 'FRONTEND', 'MOTION', 'CONTENT', 'GridRunner', 'TypeSmith', 'ShapeShifter', 'FrameForge', 'Redline_01', 'CanvasPilot', 'GlyphWorks', 'SnapLogic'];
   const leadColors = ['#ed402e', '#67c8ff', '#c5dd78', '#ff9cce'];
@@ -109,7 +110,7 @@
   function makeAgents(count) {
     if (!allowedCursorCounts.has(count)) return;
     const previous = new Map(state.agents.map(agent => [agent.id, agent]));
-    state.agentLimit = state.reduced ? 24 : ((navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 36 : 100);
+    state.agentLimit = state.reduced ? 24 : isMobile ? 3 : ((navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 36 : 100);
     const activeCount = Math.min(count, state.agentLimit);
     state.agents = Array.from({ length: activeCount }, (_, index) => {
       const old = previous.get(index);
@@ -1110,6 +1111,38 @@
     event.currentTarget.querySelector('span').textContent = state.reduced ? 'MOTION REDUCED' : 'MOTION FULL';
     if (state.phase !== 'ambient') replayBuild();
   });
+  const menuToggle = document.querySelector('.menu-toggle');
+  const topbar = document.querySelector('.topbar');
+  if (menuToggle && topbar) {
+    menuToggle.addEventListener('click', () => {
+      const open = topbar.classList.toggle('nav-open');
+      menuToggle.setAttribute('aria-expanded', String(open));
+      menuToggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    });
+    topbar.querySelectorAll('nav a').forEach(link => {
+      link.addEventListener('click', () => {
+        topbar.classList.remove('nav-open');
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuToggle.setAttribute('aria-label', 'Open navigation');
+      });
+    });
+    document.addEventListener('click', event => {
+      if (topbar.classList.contains('nav-open') && !topbar.contains(event.target)) {
+        topbar.classList.remove('nav-open');
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuToggle.setAttribute('aria-label', 'Open navigation');
+      }
+    });
+  }
+  if (isMobile) {
+    document.body.classList.add('activity-collapsed');
+    const collapseBtn = byId('activity-collapse');
+    if (collapseBtn) {
+      collapseBtn.setAttribute('aria-expanded', 'false');
+      collapseBtn.setAttribute('aria-label', 'Expand activity list');
+      collapseBtn.textContent = '+';
+    }
+  }
   /* DEV_ONLY_START:PROFILE_EDITOR */
   byId('inspect-toggle').addEventListener('click', () => openDrawer(drawer.hidden));
   byId('inspect-close').addEventListener('click', () => openDrawer(false));
