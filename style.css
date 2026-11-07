@@ -60,3 +60,10 @@ html:not(.js) body.construction-active [data-build-section],html:not(.js) body.c
 
 /* Phase 2 — Mobile responsiveness fixes */
 @media(max-width:600px){.topbar.section-built{clip-path:none!important}.topbar.nav-open{z-index:100}.topbar.nav-open nav{display:flex;z-index:100}.topbar.nav-open nav a{opacity:1!important;visibility:visible!important;pointer-events:auto!important;clip-path:none!important}.portrait-wrap:after{inset:8px 0 -8px 8px}.credential-grid>div:nth-child(3),.credential-grid>div:nth-child(5){border-top:1px solid #beb8b0}.footer{padding-bottom:64px}}
+
+/* Phase 4 — Accessibility, visible focus and interactive polish */
+button,input,textarea{touch-action:manipulation}
+.brand:focus-visible,.topbar nav a:focus-visible,.round-link:focus-visible,.preview:focus-visible,.repo-link:focus-visible,.contact-cta:focus-visible,.contact-links a:focus-visible,.footer a:focus-visible,.skill-row b:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+.contact :focus-visible{outline-color:#fff}
+@media(max-width:600px){.menu-toggle{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:8px}.topbar.nav-open nav a{min-height:40px;display:flex;align-items:center}}
+

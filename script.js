@@ -100,7 +100,7 @@
   }
 
   function resizeCanvas() {
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     canvas.width = Math.round(window.innerWidth * dpr);
     canvas.height = Math.round(window.innerHeight * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1093,7 +1093,7 @@
   assignBuildParts();
   makeAgents(56);
   resizeCanvas();
-  window.addEventListener('resize', () => { resizeCanvas(); state.layoutCache.dirty = true; });
+  window.addEventListener('resize', () => { resizeCanvas(); state.layoutCache.dirty = true; }, { passive: true });
   window.addEventListener('scroll', () => { state.layoutCache.dirty = true; }, { passive: true });
   window.addEventListener('pointermove', event => {
     state.mouse.x = event.clientX;
