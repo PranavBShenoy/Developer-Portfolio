@@ -64,7 +64,6 @@
     typing: null,
     typeSources: new WeakMap(),
     typedElements: new Set(),
-    frame: 0,
     frame: 0
   };
 
@@ -72,7 +71,7 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const easeInOut = value => {
     const t = clamp(value, 0, 1);
-    return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    return t * t * t * (t * (6 * t - 15) + 10);
   };
   const nowMs = () => state.clock;
 
@@ -137,7 +136,7 @@
     });
   }
 
-  function phaseTiming() { return state.reduced ? { voidEnd: 520 } : { voidEnd: 1550 }; }
+  function phaseTiming() { return state.reduced ? { voidEnd: 420 } : { voidEnd: 1150 }; }
 
   function phaseLabel(phase) {
     const labels = {
@@ -195,12 +194,12 @@
       const leadEnd = { x: clamp(rect.x + rect.w - 8, 8, innerWidth - 24), y: clamp(rect.y + rect.h - 8, 8, innerHeight - 24) };
       const partnerPoint = { x: clamp(rect.x + rect.w - 8, 8, innerWidth - 24), y: clamp(rect.y - 8, 8, innerHeight - 24) };
       const distance = Math.hypot(leadStart.x - lead.x, leadStart.y - lead.y);
-      const moveDuration = state.reduced ? 80 : Math.round(clamp(420 + distance * .32 + ((index * 67) % 150), 520, 1180));
+      const moveDuration = state.reduced ? 80 : Math.round(clamp(360 + distance * .24 + ((index * 67) % 130), 440, 920));
       return {
         kind: 'intro', index, plan, target, rect, lead, partner, leadStart, leadEnd, partnerPoint,
-        status: 'queued', startAt: state.clock + (state.reduced ? index * 28 : Math.round(plan.offset * .72)),
-        moveDuration: Math.round(moveDuration * durationFactor), dragDuration: state.reduced ? 110 : 720 + (index % 3) * 115,
-        confirmDuration: state.reduced ? 90 : 260, partIndex: 0, materializeAt: null, revealItems: [],
+        status: 'queued', startAt: state.clock + (state.reduced ? index * 24 : Math.round(plan.offset * .65)),
+        moveDuration: Math.round(moveDuration * durationFactor), dragDuration: state.reduced ? 100 : 480 + (index % 3) * 90,
+        confirmDuration: state.reduced ? 80 : 180, partIndex: 0, materializeAt: null, revealItems: [],
         label: plan.label, color: palette[(index * 3) % palette.length]
       };
     }).filter(Boolean);
@@ -209,7 +208,7 @@
       const fractionX = ((index * .61803398875) % 1);
       const fractionY = ((index * .75487766625) % 1);
       const target = { x: 16 + fractionX * Math.max(40, innerWidth - 76), y: 80 + fractionY * Math.max(40, innerHeight - 150) };
-      agent.motion = { from: { x: agent.x, y: agent.y }, to: target, startAt: state.clock + Math.min(550, index * 8), duration: state.reduced ? 60 : 860 + (index % 6) * 95 };
+      agent.motion = { from: { x: agent.x, y: agent.y }, to: target, startAt: state.clock + Math.min(450, index * 7), duration: state.reduced ? 60 : 680 + (index % 6) * 75 };
     });
     state.phase = 'wireframe';
     phaseLabel('wireframe');
@@ -514,10 +513,10 @@
       const partnerId = pairIndex < 4 ? 4 + pairIndex : leadId + 1;
       task.lead = state.agents[leadId] || state.agents[0];
       task.partner = state.agents[partnerId] || state.agents[1];
-      task.startAt = now + active * 220;
-      task.moveDuration = state.reduced ? 80 : 680 + (pairIndex % 4) * 95;
-      task.dragDuration = state.reduced ? 110 : 850 + (pairIndex % 3) * 110;
-      task.confirmDuration = state.reduced ? 90 : 260;
+      task.startAt = now + active * 180;
+      task.moveDuration = state.reduced ? 80 : 520 + (pairIndex % 4) * 75;
+      task.dragDuration = state.reduced ? 100 : 540 + (pairIndex % 3) * 85;
+      task.confirmDuration = state.reduced ? 80 : 180;
       task.status = 'scheduled';
       active++;
     }
@@ -608,12 +607,19 @@
 
   function drawCursor(agent, now, showTrail = true) {
     if (showTrail && agent.history.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(agent.history[0].x, agent.history[0].y);
-      for (let i = 1; i < agent.history.length; i++) ctx.lineTo(agent.history[i].x, agent.history[i].y);
-      ctx.strokeStyle = `${agent.color}55`;
-      ctx.lineWidth = .8;
-      ctx.stroke();
+      for (let i = 1; i < agent.history.length; i++) {
+        const p0 = agent.history[i - 1];
+        const p1 = agent.history[i];
+        const progress = i / agent.history.length;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.strokeStyle = agent.color;
+        ctx.globalAlpha = progress * 0.45;
+        ctx.lineWidth = 0.6 + progress * 0.5;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
     const size = state.count > 80 ? 5 : state.count > 40 ? 7 : 9;
     ctx.save();
@@ -634,10 +640,14 @@
     ctx.font = `700 ${fontSize}px "DM Mono",monospace`;
     const badgeWidth = agent.badgeWidth || ctx.measureText(badgeName).width + 5;
     const badgeHeight = fontSize + 4;
+    const flipX = (agent.x + size * 1.85 + badgeWidth > innerWidth - 8);
+    const flipY = (agent.flipY || (agent.y + badgeHeight + 16 > innerHeight));
+    const bx = flipX ? -(badgeWidth + 4) : size * 1.85;
+    const by = flipY ? -(badgeHeight + 2) : size * 1.08;
     ctx.fillStyle = agent.color;
-    ctx.fillRect(size * 1.85, size * 1.08, badgeWidth, badgeHeight);
+    ctx.fillRect(bx, by, badgeWidth, badgeHeight);
     ctx.fillStyle = '#09090b';
-    ctx.fillText(badgeName, size * 1.85 + 2.5, size * 1.08 + fontSize + .6);
+    ctx.fillText(badgeName, bx + 2.5, by + fontSize + .6);
     ctx.restore();
   }
 
@@ -681,7 +691,7 @@
     task.lead.motion = null; task.partner.motion = null;
     task.lead.vx = 0; task.lead.vy = 0; task.partner.vx = 0; task.partner.vy = 0;
     const distance = Math.max(Math.hypot(task.leadStart.x - task.lead.x, task.leadStart.y - task.lead.y), Math.hypot(task.partnerPoint.x - task.partner.x, task.partnerPoint.y - task.partner.y));
-    if (!task.moveDuration) task.moveDuration = state.reduced ? 80 : Math.round(clamp(430 + distance * .32 + ((task.index * 61) % 180), 520, 1450));
+    if (!task.moveDuration) task.moveDuration = state.reduced ? 80 : Math.round(clamp(360 + distance * .24 + ((task.index * 61) % 150), 440, 1050));
     task.routeAt = now;
     task.lastScrollY = window.scrollY;
     task.status = 'moving';
@@ -811,22 +821,27 @@
 
   function targetPoint(agent, index, target, visit) {
     const rect = target.rect;
-    const slotX = .18 + (((index * .137 + visit * .291) % 1) * .64);
-    const slotY = .18 + (((index * .311 + visit * .173) % 1) * .62);
+    const cols = rect.w > 360 ? 5 : (rect.w > 180 ? 3 : 2);
+    const rows = rect.h > 120 ? 3 : (rect.h > 60 ? 2 : 1);
+    const colSlot = (index + visit * 2) % cols;
+    const rowSlot = Math.floor((index * 3 + visit) / cols) % rows;
+    const slotX = ((colSlot + 0.5) / cols) * 0.74 + 0.13;
+    const slotY = ((rowSlot + 0.5) / rows) * 0.70 + 0.15;
+    agent.flipY = (rowSlot === 0 && rows > 1 && index % 2 === 1);
     return {
-      x: clamp(rect.x + rect.w * slotX, 5, innerWidth - 24),
-      y: clamp(rect.y + rect.h * slotY, 5, innerHeight - 24)
+      x: clamp(rect.x + rect.w * slotX, 10, innerWidth - 32),
+      y: clamp(rect.y + rect.h * slotY, 10, innerHeight - 26)
     };
   }
 
   function drawSelection(now, anchors) {
     if (state.mode !== 'collab' || state.reduced || !anchors.length) return;
-    const slot = Math.floor(now / 4300) % anchors.length;
+    const slot = Math.floor(now / 3200) % anchors.length;
     const target = anchors[slot];
     const r = target.rect;
-    const band = Math.max(28, Math.min(r.w * (.28 + ((Math.floor(now / 900) % 4) * .08)), r.w - 3));
+    const band = Math.max(28, Math.min(r.w * (.28 + ((Math.floor(now / 750) % 4) * .08)), r.w - 3));
     const lineHeight = Math.max(7, Math.min(13, r.h * .12));
-    const y = r.y + Math.min(r.h - lineHeight, 5 + (Math.floor(now / 1400) % 3) * lineHeight * 1.2);
+    const y = r.y + Math.min(r.h - lineHeight, 5 + (Math.floor(now / 1100) % 3) * lineHeight * 1.2);
     ctx.fillStyle = 'rgba(59,130,246,0.18)';
     ctx.fillRect(r.x + 2, y, band, lineHeight);
   }
@@ -853,11 +868,12 @@
         const ring = 18 + Math.sqrt(index) * (state.count > 60 ? 8 : 12);
         const point = { x: centerX + Math.cos(angle) * ring, y: centerY + Math.sin(angle) * ring * .65 };
         const dt = Math.min(.05, (state.delta || 16) / 1000);
-        const spring = state.reduced ? 1 : 10;
+        const spring = state.reduced ? 1 : 13.5;
         if (state.reduced) { agent.x = point.x; agent.y = point.y; }
         else {
-          const ax = (point.x - agent.x) * spring * spring - 2 * spring * agent.vx;
-          const ay = (point.y - agent.y) * spring * spring - 2 * spring * agent.vy;
+          const damping = 2.1 * spring;
+          const ax = (point.x - agent.x) * spring * spring - damping * agent.vx;
+          const ay = (point.y - agent.y) * spring * spring - damping * agent.vy;
           agent.vx += ax * dt; agent.vy += ay * dt;
           agent.x += agent.vx * dt; agent.y += agent.vy * dt;
         }
@@ -868,9 +884,9 @@
         const activeTarget = pool[targetIndex];
         const point = targetPoint(agent, index, activeTarget, agent.visit);
         const distance = Math.hypot(point.x - agent.x, point.y - agent.y);
-        const duration = clamp(680 + distance * .34 + ((index * 47 + agent.visit * 31) % 230), 720, 1800);
+        const duration = clamp(440 + distance * .22 + ((index * 47 + agent.visit * 31) % 160), 480, 1150);
         agent.motion = { from: { x: agent.x, y: agent.y }, to: point, startAt: now, duration };
-        agent.restUntil = now + duration + 1900 + (index % 5) * 480;
+        agent.restUntil = now + duration + 550 + (index % 5) * 260;
         agent.targetKey = activeTarget.key;
         agent.pendingRipple = index % 13 === 0 && activeTarget.element.matches('a,button') ? activeTarget : null;
       } else if (agent.motion && now >= agent.motion.startAt) {
@@ -889,11 +905,11 @@
           }
         }
       }
-      if (index % (state.agentLimit > 70 ? 5 : 3) === 0) {
+      if (index % (state.agentLimit > 70 ? 4 : 2) === 0) {
         agent.history.push({ x: agent.x, y: agent.y, time: now });
-        if (agent.history.length > 5) agent.history.shift();
-      } else if (agent.history.length > 0 && now - agent.history[0].time > 140) agent.history.shift();
-      drawCursor(agent, now, !state.reduced && index % 3 === 0);
+        if (agent.history.length > 7) agent.history.shift();
+      } else if (agent.history.length > 0 && now - agent.history[0].time > 160) agent.history.shift();
+      drawCursor(agent, now, !state.reduced && index % 2 === 0);
     });
 
     if (state.typing?.char?.isConnected) {
