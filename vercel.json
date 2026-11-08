@@ -10,7 +10,11 @@
   ],
   "rewrites": [
     { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/admin/", "destination": "/admin/index.html" }
+    { "source": "/admin/", "destination": "/admin/index.html" },
+    { "source": "/api/admin", "destination": "/api/admin/[...path]" },
+    { "source": "/api/admin/", "destination": "/api/admin/[...path]" },
+    { "source": "/api/public", "destination": "/api/public/[...path]" },
+    { "source": "/api/public/", "destination": "/api/public/[...path]" }
   ],
   "headers": [
     {
@@ -74,7 +78,24 @@
       ]
     },
     {
-      "source": "/admin(?:/(.*))?",
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'none'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co; worker-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "private, no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",

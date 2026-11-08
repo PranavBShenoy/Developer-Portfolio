@@ -155,8 +155,8 @@ console.log('\n--- 2. Testing Shared Security Libraries ---');
 
 console.log('\n--- 3. Testing CDN Cache Revocation & Public Media Endpoints ---');
 {
-  const mediaHandler = (await import('../api/public/media/[id].js')).default;
-  const resumeHandler = (await import('../api/public/resume.js')).default;
+  const mediaHandler = (await import('../lib/public/media/[id].js')).default;
+  const resumeHandler = (await import('../lib/public/resume.js')).default;
 
   function createMockRes() {
     return {
@@ -223,8 +223,8 @@ console.log('\n--- 3. Testing CDN Cache Revocation & Public Media Endpoints ---'
 
 console.log('\n--- 4. Testing Resume Selection & Inconsistent State Guard ---');
 {
-  const resumeHandler = (await import('../api/public/resume.js')).default;
-  const resumeSource = await readFile(path.join(root, 'api/public/resume.js'), 'utf8');
+  const resumeHandler = (await import('../lib/public/resume.js')).default;
+  const resumeSource = await readFile(path.join(root, 'lib/public/resume.js'), 'utf8');
 
   // Verify explicit query for single designated primary resume
   pass(resumeSource.includes('is_primary_resume=eq.true'), 'Resume handler explicitly filters for is_primary_resume=eq.true');
@@ -243,10 +243,10 @@ console.log('\n--- 4. Testing Resume Selection & Inconsistent State Guard ---');
 
 console.log('\n--- 5. Testing Administrative API Endpoints Contract & Safety ---');
 {
-  const meHandler = (await import('../api/admin/auth/me.js')).default;
-  const loginHandler = (await import('../api/admin/auth/login.js')).default;
-  const previewHandler = (await import('../api/admin/content/preview.js')).default;
-  const publicContentHandler = (await import('../api/public/content.js')).default;
+  const meHandler = (await import('../lib/admin/auth/me.js')).default;
+  const loginHandler = (await import('../lib/admin/auth/login.js')).default;
+  const previewHandler = (await import('../lib/admin/content/preview.js')).default;
+  const publicContentHandler = (await import('../lib/public/content.js')).default;
 
   function createMockRes() {
     return {

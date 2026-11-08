@@ -15,21 +15,23 @@ import { spawnSync, execSync, spawn } from 'node:child_process';
 import { existsSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 
-// Import Admin Handlers directly to test full request/response cycle
-import projectsHandler from '../api/admin/projects/index.js';
-import projectByIdHandler from '../api/admin/projects/[id].js';
-import skillsHandler from '../api/admin/skills/index.js';
-import experienceHandler from '../api/admin/experience/index.js';
-import certsHandler from '../api/admin/certifications/index.js';
-import settingsHandler from '../api/admin/settings/index.js';
-import mediaListHandler from '../api/admin/media/index.js';
-import mediaUploadHandler from '../api/admin/media/upload.js';
-import previewHandler from '../api/admin/content/preview.js';
-import publishHandler from '../api/admin/publish/index.js';
-import rollbackHandler from '../api/admin/publish/rollback.js';
-import auditLogsHandler from '../api/admin/audit-logs/index.js';
-import publicContentHandler from '../api/public/content.js';
+// Import Handlers from lib/ and consolidated routers in api/
+import projectsHandler from '../lib/admin/projects/index.js';
+import projectByIdHandler from '../lib/admin/projects/[id].js';
+import skillsHandler from '../lib/admin/skills/index.js';
+import experienceHandler from '../lib/admin/experience/index.js';
+import certsHandler from '../lib/admin/certifications/index.js';
+import settingsHandler from '../lib/admin/settings/index.js';
+import mediaListHandler from '../lib/admin/media/index.js';
+import mediaUploadHandler from '../lib/admin/media/upload.js';
+import previewHandler from '../lib/admin/content/preview.js';
+import publishHandler from '../lib/admin/publish/index.js';
+import rollbackHandler from '../lib/admin/publish/rollback.js';
+import auditLogsHandler from '../lib/admin/audit-logs/index.js';
+import publicContentHandler from '../lib/public/content.js';
 import cronKeepaliveHandler from '../api/cron/keepalive.js';
+import adminRouterHandler from '../api/admin/[...path].js';
+import publicRouterHandler from '../api/public/[...path].js';
 import { triggerVercelDeployHook } from '../lib/deploy-hook.js';
 
 const PG_DIR = '/tmp/pg_cms_api_cluster';
@@ -889,6 +891,41 @@ async function runTests() {
     // 12.6 Static verification on compliant build output
     const verifyRes = spawnSync('node', ['scripts/verify-build.mjs'], { encoding: 'utf8' });
     assert(verifyRes.status === 0, 'Static verification passes on Supabase-backed build: 0 network clients, 100% network-free frontend');
+
+    // =========================================================================
+    // 13. Consolidated Catch-All Routers (api/admin/[...path].js & api/public/[...path].js)
+    // =========================================================================
+    console.log('\n--- 13. Testing Consolidated Catch-All Serverless Routers ---');
+
+    // 13.1 Admin Router dispatches /api/admin/projects
+    const { req: reqRProjects, res: resRProjects } = createMockReqRes({ method: 'GET', url: '/api/admin/projects' });
+    await adminRouterHandler(reqRProjects, resRProjects);
+    assert(resRProjects._getResult().statusCode === 200, 'adminRouterHandler: GET /api/admin/projects returns 200 OK');
+
+    // 13.2 Admin Router dispatches /api/admin/skills
+    const { req: reqRSkills, res: resRSkills } = createMockReqRes({ method: 'GET', url: '/api/admin/skills' });
+    await adminRouterHandler(reqRSkills, resRSkills);
+    assert(resRSkills._getResult().statusCode === 200, 'adminRouterHandler: GET /api/admin/skills returns 200 OK');
+
+    // 13.3 Admin Router dispatches /api/admin/content/preview
+    const { req: reqRPreview, res: resRPreview } = createMockReqRes({ method: 'GET', url: '/api/admin/content/preview' });
+    await adminRouterHandler(reqRPreview, resRPreview);
+    assert(resRPreview._getResult().statusCode === 200, 'adminRouterHandler: GET /api/admin/content/preview returns 200 OK');
+
+    // 13.4 Admin Router returns 404 for unknown subpath
+    const { req: reqR404, res: resR404 } = createMockReqRes({ method: 'GET', url: '/api/admin/nonexistent-route' });
+    await adminRouterHandler(reqR404, resR404);
+    assert(resR404._getResult().statusCode === 404, 'adminRouterHandler: GET /api/admin/nonexistent-route returns 404');
+
+    // 13.5 Public Router dispatches /api/public/content
+    const { req: reqRPubContent, res: resRPubContent } = createPublicVisitorReqRes({ method: 'GET', url: '/api/public/content' });
+    await publicRouterHandler(reqRPubContent, resRPubContent);
+    assert(resRPubContent._getResult().statusCode === 200, 'publicRouterHandler: GET /api/public/content returns 200 OK');
+
+    // 13.6 Public Router returns 404 for unknown subpath
+    const { req: reqRPub404, res: resRPub404 } = createPublicVisitorReqRes({ method: 'GET', url: '/api/public/unknown-route' });
+    await publicRouterHandler(reqRPub404, resRPub404);
+    assert(resRPub404._getResult().statusCode === 404, 'publicRouterHandler: GET /api/public/unknown-route returns 404');
 
     console.log('\n========================================================================');
     console.log(`ALL CMS API & LIFECYCLE TESTS PASSED: ${passed} passed, ${failed} failed.`);
