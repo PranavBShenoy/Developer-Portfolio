@@ -12,9 +12,9 @@
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/admin/", "destination": "/admin/index.html" },
     { "source": "/api/admin", "destination": "/api/admin/[...path]" },
-    { "source": "/api/admin/", "destination": "/api/admin/[...path]" },
+    { "source": "/api/admin/(.*)", "destination": "/api/admin/[...path]?subpath=$1" },
     { "source": "/api/public", "destination": "/api/public/[...path]" },
-    { "source": "/api/public/", "destination": "/api/public/[...path]" }
+    { "source": "/api/public/(.*)", "destination": "/api/public/[...path]?subpath=$1" }
   ],
   "headers": [
     {

@@ -8,6 +8,10 @@ import resumeHandler from '../../lib/public/resume.js';
 import mediaByIdHandler from '../../lib/public/media/[id].js';
 
 function getSubpath(req) {
+  if (req.query?.subpath) {
+    return String(req.query.subpath).replace(/^\/+|\/+$/g, '');
+  }
+
   if (req.query?.path) {
     if (Array.isArray(req.query.path)) {
       const joined = req.query.path.filter(Boolean).join('/');

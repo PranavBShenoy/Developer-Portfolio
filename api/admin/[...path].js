@@ -21,6 +21,10 @@ import rollbackHandler from '../../lib/admin/publish/rollback.js';
 import auditLogsHandler from '../../lib/admin/audit-logs/index.js';
 
 function getSubpath(req) {
+  if (req.query?.subpath) {
+    return String(req.query.subpath).replace(/^\/+|\/+$/g, '');
+  }
+
   if (req.query?.path) {
     if (Array.isArray(req.query.path)) {
       const joined = req.query.path.filter(Boolean).join('/');
