@@ -1062,15 +1062,15 @@
           <td class="mono">${order}</td>
           <td class="cert-mark-cell">${escapeHtml(mark)}</td>
           <td>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
               ${hasImg ? `
-                <a href="${escapeHtml(c.certificate_image_url)}" target="_blank" rel="noopener noreferrer" title="View certificate image">
-                  <img src="${escapeHtml(c.certificate_image_url)}" alt="Certificate Thumbnail" style="width: 44px; height: 32px; object-fit: cover; border: 1px solid var(--admin-line); border-radius: 2px;">
+                <a href="${escapeHtml(c.certificate_image_url)}" target="_blank" rel="noopener noreferrer" title="View certificate image" class="cert-thumb-box">
+                  <img src="${escapeHtml(c.certificate_image_url)}" alt="Certificate Thumbnail" class="cert-thumb-img">
                 </a>
               ` : `
-                <div style="width: 44px; height: 32px; border: 1px dashed var(--admin-line); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: var(--admin-muted);" title="No certificate image attached">NO IMG</div>
+                <div class="cert-thumb-box" style="border-style: dashed; font-size: 8px; color: var(--admin-muted);" title="No certificate image attached">NO IMG</div>
               `}
-              <div>
+              <div style="min-width: 0;">
                 <strong>${escapeHtml(c.title)}</strong>
                 <small class="mono d-block text-muted">${escapeHtml(c.issuer)}${dateStr}${linkStr}</small>
               </div>
@@ -1176,15 +1176,20 @@
           <label class="mono">CERTIFICATE IMAGE</label>
           <div id="modal-cert-img-container" style="margin-bottom: 8px;">
             ${currentImgUrl ? `
-              <div id="cert-img-card" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--admin-line); border-radius: 4px; background: rgba(255,255,255,0.02);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <img src="${escapeHtml(currentImgUrl)}" alt="Certificate preview" id="cert-img-preview" style="max-height: 64px; max-width: 100px; border-radius: 2px; object-fit: contain;">
-                  <div>
-                    <span class="mono d-block" style="font-size: 11px; font-weight: 600;">Image Attached</span>
-                    <small class="mono text-muted" style="font-size: 9px;">Ready for static build bundling</small>
+              <div id="cert-img-card" class="cert-preview-card">
+                <div class="cert-preview-wrap">
+                  <img src="${escapeHtml(currentImgUrl)}" alt="Certificate preview" id="cert-img-preview" class="cert-preview-img">
+                </div>
+                <div class="cert-preview-meta">
+                  <div class="cert-preview-info">
+                    <span class="mono cert-preview-title">Image Attached</span>
+                    <small class="mono text-muted">Ready for static build bundling</small>
+                  </div>
+                  <div class="cert-preview-actions">
+                    <a href="${escapeHtml(currentImgUrl)}" target="_blank" rel="noopener noreferrer" class="admin-btn admin-btn-sm" style="text-decoration:none;">VIEW FULL ↗</a>
+                    <button type="button" class="admin-btn admin-btn-sm admin-btn-danger" id="btn-remove-cert-img">REMOVE</button>
                   </div>
                 </div>
-                <button type="button" class="admin-btn admin-btn-sm admin-btn-danger" id="btn-remove-cert-img">REMOVE</button>
               </div>
             ` : `
               <div id="cert-img-placeholder" class="mono text-muted" style="font-size: 11px; padding: 8px; border: 1px dashed var(--admin-line); border-radius: 4px; text-align: center;">
@@ -1273,15 +1278,20 @@
             imgValInput.value = assetUrl;
 
             imgContainer.innerHTML = `
-              <div id="cert-img-card" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--admin-line); border-radius: 4px; background: rgba(255,255,255,0.02);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <img src="${escapeHtml(assetUrl)}" alt="Certificate preview" id="cert-img-preview" style="max-height: 64px; max-width: 100px; border-radius: 2px; object-fit: contain;">
-                  <div>
-                    <span class="mono d-block" style="font-size: 11px; font-weight: 600;">Uploaded: ${escapeHtml(file.name)}</span>
-                    <small class="mono text-muted" style="font-size: 9px;">Ready for static build bundling</small>
+              <div id="cert-img-card" class="cert-preview-card">
+                <div class="cert-preview-wrap">
+                  <img src="${escapeHtml(assetUrl)}" alt="Certificate preview" id="cert-img-preview" class="cert-preview-img">
+                </div>
+                <div class="cert-preview-meta">
+                  <div class="cert-preview-info">
+                    <span class="mono cert-preview-title">Uploaded: ${escapeHtml(file.name)}</span>
+                    <small class="mono text-muted">Ready for static build bundling</small>
+                  </div>
+                  <div class="cert-preview-actions">
+                    <a href="${escapeHtml(assetUrl)}" target="_blank" rel="noopener noreferrer" class="admin-btn admin-btn-sm" style="text-decoration:none;">VIEW FULL ↗</a>
+                    <button type="button" class="admin-btn admin-btn-sm admin-btn-danger" id="btn-remove-cert-img-dynamic">REMOVE</button>
                   </div>
                 </div>
-                <button type="button" class="admin-btn admin-btn-sm admin-btn-danger" id="btn-remove-cert-img-dynamic">REMOVE</button>
               </div>
             `;
 

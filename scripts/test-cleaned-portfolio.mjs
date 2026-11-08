@@ -188,7 +188,7 @@ async function run() {
     pass(canvasHalted, 'Canvas is shut down immediately upon interruption');
     await page2.close();
 
-    // 4. Reduced Motion Test
+    // 4. Reduced Motion Test (Desktop & Mobile)
     console.log('\n--- 4. Testing Reduced Motion Accessibility ---');
     const reducedContext = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -199,7 +199,7 @@ async function run() {
     await reducedPage.waitForTimeout(200);
 
     const reducedComplete = await reducedPage.evaluate(() => document.body.classList.contains('cinematic-complete'));
-    pass(reducedComplete, 'Prefers-reduced-motion bypasses cursor intro immediately');
+    pass(reducedComplete, 'Prefers-reduced-motion bypasses cursor intro immediately on desktop');
 
     const reducedCanvasHidden = await reducedPage.evaluate(() => {
       const c = document.querySelector('#construction-canvas');
@@ -208,9 +208,23 @@ async function run() {
     pass(reducedCanvasHidden, 'Construction canvas is completely dormant and hidden under reduced motion');
     await reducedContext.close();
 
-    // 5. Mobile Responsiveness (390px and 430px)
-    console.log('\n--- 5. Testing Mobile Responsiveness & Clean Layout ---');
-    for (const width of [390, 430]) {
+    const mobileReducedContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+      reducedMotion: 'reduce'
+    });
+    const mobileReducedPage = await mobileReducedContext.newPage();
+    await mobileReducedPage.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
+    await mobileReducedPage.waitForTimeout(200);
+    const mobileReducedComplete = await mobileReducedPage.evaluate(() => document.body.classList.contains('cinematic-complete'));
+    pass(mobileReducedComplete, 'Prefers-reduced-motion bypasses cursor intro immediately on mobile');
+    await mobileReducedContext.close();
+
+    // 5. Mobile Cinematic Intro Lifecycle & Touch Responsiveness (360px, 390px, 430px)
+    console.log('\n--- 5. Testing Mobile Cinematic Intro Lifecycle & Responsiveness ---');
+    for (const width of [360, 390, 430]) {
+      console.log(`\n  Checking viewport: ${width}px width...`);
       const mobileContext = await browser.newContext({
         viewport: { width, height: 844 },
         hasTouch: true,
@@ -218,19 +232,45 @@ async function run() {
       });
       const mobilePage = await mobileContext.newPage();
       await mobilePage.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
-      await mobilePage.waitForTimeout(300);
 
-      const mobileComplete = await mobilePage.evaluate(() => document.body.classList.contains('cinematic-complete'));
-      pass(mobileComplete, `${width}px mobile: Native touch browsing active immediately`);
+      // Verify intro starts automatically on mobile
+      const startsActive = await mobilePage.evaluate(() => {
+        return !document.body.classList.contains('cinematic-complete');
+      });
+      pass(startsActive, `${width}px mobile: Cinematic intro starts automatically on fresh page load`);
 
-      const hasHorizOverflow = await mobilePage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-      pass(!hasHorizOverflow, `${width}px mobile: Zero horizontal overflow (scrollWidth <= innerWidth)`);
+      const canvasActiveMobile = await mobilePage.evaluate(() => {
+        const c = document.querySelector('#construction-canvas');
+        return c && getComputedStyle(c).opacity !== '0';
+      });
+      pass(canvasActiveMobile, `${width}px mobile: Canvas is actively rendering intro animation`);
+
+      // Verify no horizontal overflow during active intro
+      const hasHorizOverflowStart = await mobilePage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      pass(!hasHorizOverflowStart, `${width}px mobile: Zero horizontal overflow during intro (scrollWidth <= innerWidth)`);
+
+      // Test mobile touch interruption
+      await mobilePage.touchscreen.tap(width / 2, 400);
+      await mobilePage.waitForTimeout(200);
+
+      const interruptedComplete = await mobilePage.evaluate(() => document.body.classList.contains('cinematic-complete'));
+      pass(interruptedComplete, `${width}px mobile: Touch tap immediately hands control back to website (cinematic-complete)`);
+
+      const canvasShutDown = await mobilePage.evaluate(() => {
+        const c = document.querySelector('#construction-canvas');
+        return getComputedStyle(c).opacity === '0';
+      });
+      pass(canvasShutDown, `${width}px mobile: Canvas stops and hides immediately upon touch interruption`);
+
+      // Verify no horizontal overflow after interruption
+      const hasHorizOverflowEnd = await mobilePage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      pass(!hasHorizOverflowEnd, `${width}px mobile: Zero horizontal overflow after handoff (scrollWidth <= innerWidth)`);
 
       const footerPadding = await mobilePage.evaluate(() => {
         const f = document.querySelector('.footer');
         return parseInt(getComputedStyle(f).paddingBottom, 10);
       });
-      pass(footerPadding <= 30, `${width}px mobile: Footer has normal clean bottom padding (${footerPadding}px, no obsolete 64px dock offset)`);
+      pass(footerPadding <= 30, `${width}px mobile: Footer has normal clean bottom padding (${footerPadding}px)`);
 
       // Test mobile menu navigation
       await mobilePage.click('.menu-toggle');
@@ -240,6 +280,47 @@ async function run() {
       await mobilePage.close();
       await mobileContext.close();
     }
+
+    // 5b. Full Autonomous Mobile Cinematic Intro Playthrough (390px)
+    console.log('\n--- 5b. Full Autonomous Mobile Cinematic Intro Playthrough (390px) ---');
+    const mobPlayContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true
+    });
+    const mobPlayPage = await mobPlayContext.newPage();
+    await mobPlayPage.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
+
+    console.log('  Waiting for mobile Phase 2 (tour-down scroll)...');
+    await mobPlayPage.waitForFunction(() => window.scrollY > 150, { timeout: 15000 });
+    const mobMidScroll = await mobPlayPage.evaluate(() => window.scrollY);
+    pass(mobMidScroll > 150, `Mobile automated tour-down scroll is progressing (scrollY: ${Math.round(mobMidScroll)}px)`);
+
+    console.log('  Waiting for mobile Phase 4 (bottom reached)...');
+    await mobPlayPage.waitForFunction(() => {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      return window.scrollY >= maxScroll - 50;
+    }, { timeout: 15000 });
+    const mobBottomScroll = await mobPlayPage.evaluate(() => window.scrollY);
+    pass(mobBottomScroll > 500, `Mobile reached bottom of page (scrollY: ${Math.round(mobBottomScroll)}px)`);
+
+    console.log('  Waiting for mobile Phase 5 & 6 (return to top & cinematic-complete)...');
+    await mobPlayPage.waitForFunction(() => {
+      return document.body.classList.contains('cinematic-complete') && window.scrollY <= 10;
+    }, { timeout: 15000 });
+    const mobFinalScroll = await mobPlayPage.evaluate(() => window.scrollY);
+    pass(mobFinalScroll <= 10, `Mobile returned to top cleanly (scrollY: ${Math.round(mobFinalScroll)}px)`);
+
+    const mobComplete = await mobPlayPage.evaluate(() => document.body.classList.contains('cinematic-complete'));
+    pass(mobComplete, 'Mobile body has class "cinematic-complete" after full intro');
+
+    // Verify it doesn't replay in a loop
+    await mobPlayPage.waitForTimeout(1000);
+    const stillComplete = await mobPlayPage.evaluate(() => document.body.classList.contains('cinematic-complete') && window.scrollY <= 10);
+    pass(stillComplete, 'Mobile intro does not loop or replay after finishing');
+
+    await mobPlayPage.close();
+    await mobPlayContext.close();
 
     // 6. Screenshot Capture
     console.log('\n--- 6. Capturing Fresh Screenshots of Cleaned Website ---');

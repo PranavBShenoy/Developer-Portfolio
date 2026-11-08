@@ -125,7 +125,7 @@
   function makeAgents(count) {
     if (!allowedCursorCounts.has(count)) return;
     const previous = new Map(state.agents.map(agent => [agent.id, agent]));
-    state.agentLimit = state.reduced ? 24 : isMobile ? 3 : ((navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 36 : 100);
+    state.agentLimit = state.reduced ? 24 : isMobile ? 24 : ((navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ? 36 : 100);
     const activeCount = Math.min(count, state.agentLimit);
     state.agents = Array.from({ length: activeCount }, (_, index) => {
       const old = previous.get(index);
@@ -633,14 +633,18 @@
       ctx.fillRect(x - handle / 2, y - handle / 2, handle, handle);
       ctx.strokeRect(x - handle / 2, y - handle / 2, handle, handle);
     });
-    ctx.font = '10px monospace';
+    const isSmallScreen = innerWidth <= 600;
+    ctx.font = isSmallScreen ? '9px monospace' : '10px monospace';
     const text = `${box.label} ${Math.round(w)}×${Math.round(h)}`;
     const textWidth = ctx.measureText(text).width;
-    const labelWidth = textWidth + 10;
+    const labelWidth = textWidth + (isSmallScreen ? 8 : 10);
+    const labelHeight = isSmallScreen ? 14 : 16;
+    const labelX = clamp(r.x, 2, innerWidth - labelWidth - 2);
+    const labelY = Math.max(2, r.y - (labelHeight + 1));
     ctx.fillStyle = color;
-    ctx.fillRect(r.x, Math.max(2, r.y - 17), labelWidth, 16);
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
     ctx.fillStyle = '#09090b';
-    ctx.fillText(text, r.x + 5, Math.max(12, r.y - 5));
+    ctx.fillText(text, labelX + 4, labelY + (isSmallScreen ? 10 : 12));
     // Center crosshairs
     ctx.strokeStyle = color;
     ctx.globalAlpha = .5;
@@ -654,7 +658,7 @@
   }
 
   function drawCursor(agent, now, showTrail = true) {
-    if (isMobile) return;
+    const isSmallScreen = innerWidth <= 600;
     if (showTrail && agent.history.length > 1) {
       ctx.save();
       ctx.lineCap = 'round';
@@ -667,16 +671,19 @@
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
         ctx.strokeStyle = agent.color;
-        ctx.globalAlpha = progress * 0.45;
-        ctx.lineWidth = 1.2;
+        ctx.globalAlpha = progress * (isSmallScreen ? 0.35 : 0.45);
+        ctx.lineWidth = isSmallScreen ? 1 : 1.2;
         ctx.stroke();
       }
       ctx.restore();
     }
     ctx.save();
     ctx.translate(agent.x, agent.y);
+    if (isSmallScreen) {
+      ctx.scale(0.85, 0.85);
+    }
     ctx.shadowColor = '#0009';
-    ctx.shadowBlur = 5;
+    ctx.shadowBlur = isSmallScreen ? 3 : 5;
     ctx.fillStyle = agent.color;
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
@@ -693,16 +700,21 @@
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    if (innerWidth > 600 || agent.id % 3 === 0) {
-      ctx.font = 'bold 10px monospace';
-      const label = agent.action ? `${agent.name} · ${agent.action}` : agent.name;
+    const showBadge = !isSmallScreen || (agent.id % 2 === 0);
+    if (showBadge) {
+      ctx.font = isSmallScreen ? 'bold 8.5px monospace' : 'bold 10px monospace';
+      const label = isSmallScreen && agent.action ? agent.action : (agent.action ? `${agent.name} · ${agent.action}` : agent.name);
       const textWidth = ctx.measureText(label).width;
-      const badgeWidth = textWidth + 10;
+      const badgeWidth = textWidth + (isSmallScreen ? 8 : 10);
+      const badgeHeight = isSmallScreen ? 14 : 17;
+      // If badge would extend off the right edge of the screen, flip it to the left of the cursor
+      const badgeX = (agent.x + badgeWidth + 14 > innerWidth) ? -(badgeWidth + 2) : 11;
+      const badgeY = isSmallScreen ? 10 : 12;
       ctx.fillStyle = agent.color;
-      drawRoundRect(11, 12, badgeWidth, 17, 3);
+      drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 3);
       ctx.fill();
       ctx.fillStyle = '#09090b';
-      ctx.fillText(label, 16, 24);
+      ctx.fillText(label, badgeX + (isSmallScreen ? 4 : 5), badgeY + (isSmallScreen ? 10 : 12));
     }
     ctx.restore();
   }
@@ -1020,10 +1032,12 @@
       state.lastFpsCheck = now;
 
       if (state.cinematic.active && state.cinematic.phase === 'tour-down') {
-        if (currentFps < 45 && state.targetCount > 24) {
-          state.targetCount = Math.max(24, state.targetCount - 8);
-        } else if (currentFps >= 52 && state.targetCount < 56) {
-          state.targetCount = Math.min(56, state.targetCount + 6);
+        const minTarget = isMobile ? 12 : 24;
+        const maxTarget = isMobile ? 22 : 56;
+        if (currentFps < 45 && state.targetCount > minTarget) {
+          state.targetCount = Math.max(minTarget, state.targetCount - (isMobile ? 3 : 8));
+        } else if (currentFps >= 52 && state.targetCount < maxTarget) {
+          state.targetCount = Math.min(maxTarget, state.targetCount + (isMobile ? 3 : 6));
         }
       }
     }
@@ -1160,7 +1174,7 @@
   function startCinematicTourDown(now) {
     state.cinematic.phase = 'tour-down';
     state.cinematic.phaseStartClock = now;
-    state.targetCount = 56;
+    state.targetCount = isMobile ? 20 : 56;
     document.body.classList.add('cinematic-tour');
     document.documentElement.classList.add('cinematic-tour');
     const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -1237,12 +1251,13 @@
       }
 
       const interp = isAssigned ? 0.42 : (1 - Math.pow(l < 0.35 ? 0.82 : 0.965, r));
-      agent.x += (targetX - agent.x) * interp;
-      agent.y += (targetY - agent.y) * interp;
+      agent.x = clamp(agent.x + (targetX - agent.x) * interp, 6, innerWidth - 6);
+      agent.y = clamp(agent.y + (targetY - agent.y) * interp, 6, innerHeight - 6);
       agent.action = action;
 
+      const maxHistory = isMobile ? 4 : 7;
       agent.history.push({ x: agent.x, y: agent.y, time: now });
-      if (agent.history.length > 7) agent.history.shift();
+      if (agent.history.length > maxHistory) agent.history.shift();
     }
   }
 
@@ -1359,7 +1374,7 @@
     state.cinematic.interrupted = false;
     state.cinematic.phase = 'hero';
     state.cinematic.phaseStartClock = 0;
-    state.targetCount = 20;
+    state.targetCount = isMobile ? 14 : 20;
     state.phase = 'void';
     document.getElementById('swarm-initializing')?.classList.remove('init-hidden');
     state.agents.forEach(agent => {
@@ -1372,7 +1387,7 @@
       agent.pendingRipple = null;
       agent.action = null;
     });
-    if (state.reduced || isMobile) {
+    if (state.reduced) {
       revealAllInstantly();
       finishCinematicTour();
       return;
@@ -1545,7 +1560,7 @@
     } else ensureFrameLoop();
   });
 
-  if (state.reduced || isMobile) {
+  if (state.reduced) {
     revealAllInstantly();
     finishCinematicTour();
   } else {

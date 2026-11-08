@@ -34,6 +34,11 @@
   box-sizing: border-box;
 }
 
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -44,6 +49,7 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
@@ -517,6 +523,122 @@ button {
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-check-label { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 6px; }
 .cert-mark-cell { color: var(--red); font-size: 16px; }
+
+/* ==========================================================================
+   Certifications Manager & Certificate Image Previews
+   ========================================================================== */
+.cert-thumb-box {
+  width: 48px;
+  height: 36px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cert-thumb-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.cert-preview-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cert-preview-wrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: #050505;
+  border: 1px solid var(--line-light);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  overflow: hidden;
+  min-height: 100px;
+  max-height: 280px;
+}
+
+.cert-preview-img {
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.cert-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cert-preview-info {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.cert-preview-title {
+  font-size: 11px;
+  font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cert-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+#modal-cert-img-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#cert-img-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#cert-img-preview {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
 .preview-code-block {
   background: #050505;
   border: 1px solid var(--line);
@@ -537,6 +659,7 @@ button {
   background: var(--bg);
   min-width: 0;
   max-width: 1440px;
+  overflow-x: hidden;
 }
 
 .admin-pane {
@@ -657,6 +780,8 @@ button {
 
 .table-wrap {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--line);
   background: #0d0d0c;
@@ -1065,12 +1190,45 @@ button {
     padding: 20px 16px;
   }
 
+  .pane-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .admin-btn {
+    width: 100%;
+  }
+
   .settings-grid {
     grid-template-columns: 1fr;
   }
 
   .topbar-right .admin-identity {
     display: none;
+  }
+
+  .admin-topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .topbar-left, .topbar-right {
+    gap: 8px;
+  }
+
+  .topbar-left .telemetry-chip {
+    display: none;
+  }
+
+  #btn-preview-modal, #btn-logout {
+    padding: 4px 8px;
+    font-size: 10px;
   }
 
   .experience-card {
@@ -1085,5 +1243,35 @@ button {
   .experience-meta {
     justify-items: start;
     text-align: left;
+  }
+
+  .cert-preview-wrap {
+    max-height: 200px;
+    padding: 8px;
+  }
+
+  .cert-preview-img {
+    max-height: 184px;
+  }
+
+  .cert-preview-meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cert-preview-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .cert-preview-wrap {
+    max-height: 170px;
+    padding: 6px;
+  }
+
+  .cert-preview-img {
+    max-height: 158px;
   }
 }
