@@ -1,0 +1,45 @@
+name: Supabase Free Project Keepalive
+
+'on':
+  schedule:
+    # 03:17 Asia/Kolkata (IST = UTC+5:30) -> 21:47 UTC daily
+    - cron: '47 21 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Keepalive Read Query
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Supabase PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing required repository secret(s): SUPABASE_URL and/or SUPABASE_ANON_KEY."
+            exit 1
+          fi
+
+          BASE_URL="${SUPABASE_URL%/}"
+          ENDPOINT="${BASE_URL}/rest/v1/site_settings?select=id&is_current_published=eq.true&is_tombstone=eq.false&limit=1"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 15 \
+            --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${ENDPOINT}" || true)
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ] 2>/dev/null; then
+            echo "Supabase keepalive ping succeeded (HTTP ${HTTP_STATUS}). Database is active."
+          else
+            echo "::error::Supabase keepalive ping failed (HTTP status: ${HTTP_STATUS})."
+            exit 1
+          fi

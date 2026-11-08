@@ -4,11 +4,8 @@
   if (!ctx) {
     document.body.classList.remove('construction-active');
     canvas.remove();
-    document.querySelector('.construction-status')?.remove();
     return;
   }
-  const status = document.querySelector('.construction-status span');
-  const dockPhase = document.querySelector('#dock-phase');
   /* DEV_ONLY_START:PROFILE_EDITOR */
   const drawer = document.querySelector('#inspect-drawer');
   const profileForm = document.querySelector('#profile-form');
@@ -22,9 +19,11 @@
   /* DEV_ONLY_END:PROFILE_EDITOR */
   const reducePreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const isMobile = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  const PALETTE = ['#f87171', '#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#22d3ee'];
+  const AGENT_NAMES = ['pixel', 'nova', 'orbit', 'atlas', 'echo', 'byte', 'muse', 'flux', 'neo', 'zero', 'iris', 'node', 'sage', 'wave'];
   const palette = ['#ff4b36', '#58c8ff', '#b7e46d', '#ff91d4', '#ffd166', '#9e8bff', '#f7f3e8', '#ff8c42', '#45e0c0', '#f15bb5', '#a8dadc', '#e9ff70'];
   const callsigns = ['DESIGNER', 'FRONTEND', 'MOTION', 'CONTENT', 'GridRunner', 'TypeSmith', 'ShapeShifter', 'FrameForge', 'Redline_01', 'CanvasPilot', 'GlyphWorks', 'SnapLogic'];
-  const leadColors = ['#ed402e', '#67c8ff', '#c5dd78', '#ff9cce'];
+  const leadColors = ['#ed402e', '#38bdf8', '#34d399', '#fb7185'];
   const INTRO_PLAN = [
     { section: 'navigation', target: '.topbar', label: 'NAV_BAR', offset: 0, parts: [{ selector: '.brand' }, { selector: 'nav a', stagger: 145 }, { selector: '.menu-toggle', delay: 740 }] },
     { section: 'hero', target: '.hero-meta', label: 'ROLE_TAG', offset: 260, parts: [{ selector: '.hero-meta' }] },
@@ -39,19 +38,24 @@
 
   const state = {
     count: 56,
+    targetCount: 20,
     agentLimit: 56,
     mode: 'collab',
     phase: 'void',
-    sound: false,
+    sound: true,
     audio: null,
     reduced: reducePreference.matches,
     clock: 0,
     lastFrameAt: null,
     delta: 16.7,
+    fps: 60,
+    fpsSamples: [],
+    lastFpsCheck: 0,
     agents: [],
     ripples: [],
     introTasks: [],
     introStarted: false,
+    scrollDirty: false,
     sectionQueue: [],
     sectionBuilds: new Map(),
     nextAgentPair: 0,
@@ -64,7 +68,19 @@
     typing: null,
     typeSources: new WeakMap(),
     typedElements: new Set(),
-    frame: 0
+    frame: 0,
+    cinematic: {
+      active: true,
+      interrupted: false,
+      phase: 'hero',
+      phaseStartClock: 0,
+      currentStopIndex: 0,
+      scrollStartY: 0,
+      scrollTargetY: 0,
+      scrollStartClock: 0,
+      scrollDuration: 0,
+      bottomPauseUntil: 0
+    }
   };
 
   const byId = id => document.getElementById(id);
@@ -113,62 +129,43 @@
     const activeCount = Math.min(count, state.agentLimit);
     state.agents = Array.from({ length: activeCount }, (_, index) => {
       const old = previous.get(index);
-      const name = callsigns[index] || `Agent_${String(index + 1).padStart(2, '0')}`;
+      const name = `${AGENT_NAMES[index % AGENT_NAMES.length]}_${String(index + 1).padStart(2, '0')}`;
+      const color = PALETTE[index % PALETTE.length];
+      const seed = 2.399 * index;
       const fontSize = count > 80 ? 4.2 : count > 40 ? 5.4 : 7;
-      const badgeName = count > 80 && index > 11 ? `A${String(index + 1).padStart(2, '0')}` : name;
+      const badgeName = name;
       ctx.font = `700 ${fontSize}px "DM Mono",monospace`;
       const badgeWidth = ctx.measureText(badgeName).width + 5;
-      if (old) { old.fontSize = fontSize; old.badgeName = badgeName; old.badgeWidth = badgeWidth; return old; }
-      const fractionX = (index * .61803398875) % 1;
-      const fractionY = (index * .75487766625) % 1;
+      if (old) {
+        old.fontSize = fontSize;
+        old.badgeName = badgeName;
+        old.badgeWidth = badgeWidth;
+        old.name = name;
+        old.color = color;
+        old.seed = seed;
+        return old;
+      }
+      const angle = seed;
+      const r = 18 + (index % 7) * 7;
       return {
-        id: index, name, color: index < 4 ? leadColors[index] : palette[index % palette.length],
-        x: innerWidth * (.1 + fractionX * .8), y: innerHeight * (.12 + fractionY * .75), vx: 0, vy: 0,
+        id: index, name, color, seed,
+        x: innerWidth / 2 + Math.cos(angle) * r,
+        y: innerHeight / 2 + Math.sin(angle) * r,
+        vx: 0, vy: 0,
         history: [], targetKey: -1, lastClick: -10000, motion: null, restUntil: 0, slot: index,
-        fontSize, badgeName, badgeWidth, visit: 0, pendingRipple: null
+        fontSize, badgeName, badgeWidth, visit: 0, pendingRipple: null, action: null
       };
     });
     state.count = count;
-    document.querySelectorAll('[data-count-choice]').forEach(button => {
-      const selected = Number(button.dataset.countChoice) === count;
-      button.classList.toggle('selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
   }
 
-  function phaseTiming() { return state.reduced ? { voidEnd: 420 } : { voidEnd: 1150 }; }
+  function phaseTiming() { return state.reduced ? { voidEnd: 120 } : { voidEnd: 350 }; }
 
   function phaseLabel(phase) {
-    const labels = {
-      void: ['PHASE 0 / VOID', `INITIALIZING ${state.agents.length} COLLABORATIVE AGENTS...`],
-      wireframe: ['PHASE 1 / WIREFRAME', 'MAPPING LIVE COMPONENT FRAMES...'],
-      materialize: ['PHASE 2 / MATERIALIZE', 'SNAPPING ELEMENTS INTO PLACE...'],
-      ambient: ['PHASE 3 / AMBIENT', 'COLLABORATION SQUAD ONLINE']
-    };
-    dockPhase.textContent = labels[phase][0];
-    status.textContent = labels[phase][1];
     document.body.classList.toggle('phase-ambient', phase === 'ambient');
     document.body.classList.toggle('phase-wireframe', phase === 'wireframe');
     document.body.classList.toggle('phase-materialize', phase === 'materialize');
-    updateLeadActivity(phase);
     if (phase === 'ambient') startSectionObserver();
-  }
-
-  function updateLeadActivity(phase, sectionName = '') {
-    const section = sectionName.replaceAll('-', ' ').toUpperCase();
-    let tasks;
-    if (phase === 'void') tasks = [['Orbiting the center vortex', 'WAIT'], ['Mapping navigation bounds', 'MAP'], ['Calibrating cursor paths', 'TUNE'], ['Preparing text sequence', 'QUEUE']];
-    else if (phase === 'wireframe') tasks = [['Dragging hero frame', 'LAYOUT'], ['Positioning navigation', 'BUILD'], ['Sizing image and motion', 'FRAME'], ['Placing copy regions', 'COPY']];
-    else if (phase === 'materialize') tasks = [['Setting editorial type', 'TYPE'], ['Snapping UI components', 'SNAP'], ['Revealing image layers', 'REVEAL'], ['Typing profile details', 'WRITE']];
-    else if (section) tasks = [[`Tuning ${section} layout`, 'EDIT'], [`Assembling ${section} UI`, 'BUILD'], [`Applying ${section} motion`, 'MOTION'], [`Typing ${section} copy`, 'WRITE']];
-    else tasks = [['Inspecting section rhythm', 'EDIT'], ['Checking project cards', 'BUILD'], ['Tracking scroll reveals', 'MOTION'], ['Reviewing content details', 'WRITE']];
-    ['designer', 'frontend', 'motion', 'content'].forEach((role, index) => {
-      const row = document.querySelector(`[data-role-activity="${role}"]`);
-      if (!row) return;
-      row.querySelector('small').textContent = tasks[index][0];
-      row.querySelector('span').textContent = tasks[index][1];
-      row.classList.toggle('working', phase !== 'void');
-    });
   }
 
   function getRect(element) {
@@ -186,8 +183,8 @@
       if (!target || getComputedStyle(target).display === 'none') return null;
       const rect = getRect(target);
       if (!rect) return null;
-      const leadId = index < 4 ? index : 8 + (index - 4) * 2;
-      const partnerId = index < 4 ? 4 + index : leadId + 1;
+      const leadId = (2 * index) % state.targetCount;
+      const partnerId = (leadId + 1) % state.targetCount;
       const lead = state.agents[leadId] || state.agents[index % state.agents.length];
       const partner = state.agents[partnerId] || state.agents[(index + 1) % state.agents.length];
       const durationFactor = state.reduced ? .16 : 1;
@@ -195,17 +192,22 @@
       const leadEnd = { x: clamp(rect.x + rect.w - 8, 8, innerWidth - 24), y: clamp(rect.y + rect.h - 8, 8, innerHeight - 24) };
       const partnerPoint = { x: clamp(rect.x + rect.w - 8, 8, innerWidth - 24), y: clamp(rect.y - 8, 8, innerHeight - 24) };
       const distance = Math.hypot(leadStart.x - lead.x, leadStart.y - lead.y);
-      const moveDuration = state.reduced ? 80 : Math.round(clamp(360 + distance * .24 + ((index * 67) % 130), 440, 920));
+      const moveDuration = state.reduced ? 60 : Math.round(clamp(260 + distance * .16 + ((index * 43) % 90), 280, 560));
       return {
         kind: 'intro', index, plan, target, rect, lead, partner, leadStart, leadEnd, partnerPoint,
-        status: 'queued', startAt: state.clock + (state.reduced ? index * 24 : Math.round(plan.offset * .65)),
-        moveDuration: Math.round(moveDuration * durationFactor), dragDuration: state.reduced ? 100 : 480 + (index % 3) * 90,
-        confirmDuration: state.reduced ? 80 : 180, partIndex: 0, materializeAt: null, revealItems: [],
-        label: plan.label, color: palette[(index * 3) % palette.length]
+        status: 'queued', startAt: state.clock + (state.reduced ? index * 20 : Math.round(plan.offset * .35)),
+        moveDuration: Math.round(moveDuration * durationFactor), dragDuration: state.reduced ? 80 : 340 + (index % 3) * 60,
+        confirmDuration: state.reduced ? 60 : 120, partIndex: 0, materializeAt: null, revealItems: [],
+        label: plan.label, color: PALETTE[index % PALETTE.length]
       };
     }).filter(Boolean);
     state.nextMaterializeIndex = 0;
-    state.agents.forEach((agent, index) => {
+    if (!state.introTasks.length) {
+      startCinematicTourDown(state.clock);
+      return;
+    }
+    const targetAgents = state.agents.slice(0, state.targetCount);
+    targetAgents.forEach((agent, index) => {
       const fractionX = ((index * .61803398875) % 1);
       const fractionY = ((index * .75487766625) % 1);
       const target = { x: 16 + fractionX * Math.max(40, innerWidth - 76), y: 80 + fractionY * Math.max(40, innerHeight - 150) };
@@ -444,40 +446,39 @@
     task.revealFinishAt = task.revealItems.reduce((finish, item) => Math.max(finish, item.due + (item.typedElement ? [...item.typedElement.textContent].length * (state.reduced ? 0 : item.speed) + 180 : 380)), now);
     task.status = 'materializing';
     task.materializeAt = now;
-    updateLeadActivity('materialize', task.plan.section);
   }
 
   function updateIntroMaterialization(now) {
-    let task = state.introTasks.find(item => item.status === 'materializing');
-    if (!task) {
-      task = state.introTasks.find(item => item.status === 'ready');
-      if (task) beginIntroMaterialization(task, now);
-    }
-    if (!task) return;
-    task.revealItems.forEach(item => { if (!item.done && now >= item.due) fireRevealItem(item, now); });
-    if (revealTaskComplete(task, now)) {
-      task.status = 'done';
-      task.completedAt = now;
-      mechanicalClick();
-      if (state.introTasks.every(item => item.status === 'done')) status.textContent = 'PORTFOLIO ASSEMBLED · SCROLL TO BUILD MORE';
-    }
+    state.introTasks.forEach(task => {
+      if (task.status === 'ready') beginIntroMaterialization(task, now);
+      if (task.status === 'materializing') {
+        task.revealItems.forEach(item => { if (!item.done && now >= item.due) fireRevealItem(item, now); });
+        if (revealTaskComplete(task, now)) {
+          task.status = 'done';
+          task.completedAt = now;
+          mechanicalClick();
+        }
+      }
+    });
+  }
+
+  function checkScrollSections() {
+    document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
+      if (section.dataset.buildSection === 'hero' || section.classList.contains('section-built') || section.classList.contains('section-building')) return;
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= innerHeight * 1.15 && rect.bottom >= -100) constructSection(section);
+    });
   }
 
   function startSectionObserver() {
     if (state.observer || state.fallbackScrollHandler) return;
-    const checkScrollSections = () => {
-      document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
-        if (section.dataset.buildSection === 'hero' || section.classList.contains('section-built') || section.classList.contains('section-building')) return;
-        const rect = section.getBoundingClientRect();
-        if (rect.top <= innerHeight * 1.15 && rect.bottom >= -100) constructSection(section);
-      });
-    };
-    window.addEventListener('scroll', checkScrollSections, { passive: true });
-    window.addEventListener('resize', checkScrollSections);
+    const onScroll = () => { state.scrollDirty = true; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
     checkScrollSections();
 
     if (!('IntersectionObserver' in window)) {
-      state.fallbackScrollHandler = checkScrollSections;
+      state.fallbackScrollHandler = onScroll;
       return;
     }
     state.observer = new IntersectionObserver(entries => {
@@ -505,38 +506,56 @@
     state.sectionBuilds.set(section, task);
     state.sectionQueue.push(task);
     state.layoutCache.dirty = true;
-    updateLeadActivity('ambient', section.dataset.buildSection);
   }
 
   function startQueuedSections(now) {
-    while (state.sectionQueue.length) {
+    if (!state.sectionQueue.length) return;
+    const busyAgents = new Set();
+    for (const build of state.sectionBuilds.values()) {
+      if (['scheduled', 'moving', 'dragging', 'confirming', 'ready'].includes(build.status)) {
+        if (build.lead) busyAgents.add(build.lead);
+        if (build.partner) busyAgents.add(build.partner);
+      }
+    }
+    const available = state.agents.filter(agent => !busyAgents.has(agent));
+    while (state.sectionQueue.length && available.length >= 2) {
       const task = state.sectionQueue.shift();
       if (!task || !task.section.isConnected || task.section.classList.contains('section-built')) {
         if (task) state.sectionBuilds.delete(task.section);
         continue;
       }
-      const pairIndex = state.nextAgentPair++ % 8;
-      const leadId = pairIndex < 4 ? pairIndex : 8 + (pairIndex - 4) * 2;
-      const partnerId = pairIndex < 4 ? 4 + pairIndex : leadId + 1;
-      task.lead = state.agents[leadId] || state.agents[0];
-      task.partner = state.agents[partnerId] || state.agents[1];
+      const lead = available.shift();
+      const partner = available.shift();
+      if (!lead || !partner || lead === partner) {
+        if (lead) available.unshift(lead);
+        state.sectionQueue.unshift(task);
+        break;
+      }
+      busyAgents.add(lead);
+      busyAgents.add(partner);
+      task.lead = lead;
+      task.partner = partner;
+      const pairIndex = lead.id % 8;
       task.startAt = now;
       task.moveDuration = state.reduced ? 60 : 320 + (pairIndex % 4) * 50;
       task.dragDuration = state.reduced ? 80 : 340 + (pairIndex % 3) * 60;
       task.confirmDuration = state.reduced ? 60 : 120;
       task.status = 'scheduled';
       startTaskRoute(task, now);
-      beginSectionMaterialization(task, now);
     }
   }
 
   function refreshLayoutCache() {
     if (!state.layoutCache.dirty && state.clock - state.layoutCache.updatedAt < 250) return;
-    const candidates = [...document.querySelectorAll('[data-build-piece].piece-built, [data-build-section].section-built, [data-build-section].section-built a')];
+    const selector = state.cinematic.active
+      ? 'main [data-build-piece], main [data-build-section], main .project-card, main .skill-row, main .experience-item, main .credential-grid > div, main .credential-img-link, main a, main button'
+      : '[data-build-piece].piece-built, [data-build-section].section-built, [data-build-section].section-built a';
+    const candidates = [...document.querySelectorAll(selector)];
     const seen = new Set();
     const anchors = [];
     for (const element of candidates) {
-      if (element.closest('[data-build-section]:not(.section-built), [data-build-piece]:not(.piece-built)')) continue;
+      if (!element || !element.isConnected || element.offsetParent === null) continue;
+      if (!state.cinematic.active && element.closest('[data-build-section]:not(.section-built), [data-build-piece]:not(.piece-built)')) continue;
       const rect = getRect(element);
       if (!rect || rect.w < 12 || rect.h < 9) continue;
       if (element.hasAttribute('data-build-section') && !element.matches('a,button') && (rect.w > innerWidth * 0.7 || rect.h > 360)) continue;
@@ -545,7 +564,7 @@
       seen.add(key);
       anchors.push({ element, rect, key });
     }
-    const elements = [...document.querySelectorAll('[data-build-section], [data-build-piece]')];
+    const elements = [...document.querySelectorAll('[data-build-section], [data-build-piece]')].filter(el => el.isConnected && el.offsetParent !== null);
     const wireSeen = new Set();
     const wireTargets = elements.map((element, index) => ({ element, index, label: element.dataset.buildSection?.toUpperCase() || element.dataset.buildPiece?.replaceAll('-', '_').toUpperCase() || 'NODE' }))
       .filter(item => {
@@ -576,49 +595,70 @@
     }
   }
 
+  function playSnapSound() {
+    try {
+      const audio = initializeAudio();
+      if (!audio) return;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      const start = audio.currentTime;
+      osc.frequency.setValueAtTime(750, start);
+      osc.frequency.exponentialRampToValueAtTime(140, start + 0.06);
+      gain.gain.setValueAtTime(0.04, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.06);
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start(start);
+      osc.stop(start + 0.06);
+    } catch (_) {}
+  }
+
   function drawFrame(box, color, progress, opacity = 1, settled = false) {
     if (!box || !box.rect) return;
     const r = box.rect;
     const p = clamp(progress, 0, 1);
-    const w = Math.max(2, r.w * p), h = Math.max(2, r.h * p);
+    const w = Math.max(4, r.w * p), h = Math.max(4, r.h * p);
     ctx.save();
     ctx.globalAlpha = opacity;
-    if (r.w < innerWidth * 0.72 || r.h < 320) {
-      ctx.fillStyle = 'rgba(59,130,246,0.06)';
-      ctx.fillRect(r.x, r.y, w, h);
-    }
+    ctx.fillStyle = 'rgba(59,130,246,0.06)';
+    ctx.fillRect(r.x, r.y, w, h);
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.setLineDash(settled ? [] : [4, 4]);
     ctx.strokeRect(r.x + .5, r.y + .5, w, h);
     ctx.setLineDash([]);
-    const handle = 5;
+    const handle = 6;
     ctx.fillStyle = '#fff';
-    [[r.x, r.y], [r.x + w, r.y], [r.x, r.y + h], [r.x + w, r.y + h]].forEach(([x, y]) => ctx.fillRect(x - handle / 2, y - handle / 2, handle, handle));
-    const text = `${box.label} ${Math.round(w)}×${Math.round(h)}px`;
-    ctx.font = '600 7px "DM Mono",monospace';
+    [[r.x, r.y], [r.x + w, r.y], [r.x, r.y + h], [r.x + w, r.y + h]].forEach(([x, y]) => {
+      ctx.fillRect(x - handle / 2, y - handle / 2, handle, handle);
+      ctx.strokeRect(x - handle / 2, y - handle / 2, handle, handle);
+    });
+    ctx.font = '10px monospace';
+    const text = `${box.label} ${Math.round(w)}×${Math.round(h)}`;
     const textWidth = ctx.measureText(text).width;
     const labelWidth = textWidth + 10;
-    drawRoundRect(r.x, Math.max(2, r.y - 15), labelWidth, 12, 3);
-    ctx.fillStyle = 'rgba(7,7,9,.92)';
-    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillRect(r.x, Math.max(2, r.y - 17), labelWidth, 16);
+    ctx.fillStyle = '#09090b';
+    ctx.fillText(text, r.x + 5, Math.max(12, r.y - 5));
+    // Center crosshairs
     ctx.strokeStyle = color;
-    ctx.lineWidth = .75;
+    ctx.globalAlpha = .5;
+    ctx.beginPath();
+    ctx.moveTo(r.x + w / 2 - 6, r.y + h / 2);
+    ctx.lineTo(r.x + w / 2 + 6, r.y + h / 2);
+    ctx.moveTo(r.x + w / 2, r.y + h / 2 - 6);
+    ctx.lineTo(r.x + w / 2, r.y + h / 2 + 6);
     ctx.stroke();
-    ctx.fillStyle = '#f5f2ec';
-    ctx.fillText(text, r.x + 5, Math.max(10, r.y - 7));
-    if (settled) {
-      ctx.font = '600 7px "DM Mono",monospace';
-      ctx.fillStyle = '#080808';
-      ctx.fillRect(r.x + Math.max(0, r.w - 63), r.y + 5, 58, 13);
-      ctx.fillStyle = '#c5dd78';
-      ctx.fillText('✓ LOCKED', r.x + Math.max(3, r.w - 59), r.y + 14);
-    }
     ctx.restore();
   }
 
   function drawCursor(agent, now, showTrail = true) {
+    if (isMobile) return;
     if (showTrail && agent.history.length > 1) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       for (let i = 1; i < agent.history.length; i++) {
         const p0 = agent.history[i - 1];
         const p1 = agent.history[i];
@@ -628,48 +668,54 @@
         ctx.lineTo(p1.x, p1.y);
         ctx.strokeStyle = agent.color;
         ctx.globalAlpha = progress * 0.45;
-        ctx.lineWidth = 0.6 + progress * 0.5;
+        ctx.lineWidth = 1.2;
         ctx.stroke();
       }
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
-    const size = state.count > 80 ? 5 : state.count > 40 ? 7 : 9;
     ctx.save();
     ctx.translate(agent.x, agent.y);
+    ctx.shadowColor = '#0009';
+    ctx.shadowBlur = 5;
+    ctx.fillStyle = agent.color;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(size * .68, size * 1.65);
-    ctx.lineTo(size * 1.12, size * .98);
-    ctx.lineTo(size * 1.9, size * 1.02);
+    ctx.lineTo(0, 16);
+    ctx.lineTo(4.5, 12);
+    ctx.lineTo(8, 19);
+    ctx.lineTo(11, 17);
+    ctx.lineTo(7, 10);
+    ctx.lineTo(14, 10);
     ctx.closePath();
-    ctx.fillStyle = agent.color;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = .8;
     ctx.stroke();
-    const fontSize = agent.fontSize || (state.count > 80 ? 4.2 : state.count > 40 ? 5.4 : 7);
-    const badgeName = agent.badgeName || agent.name;
-    ctx.font = `700 ${fontSize}px "DM Mono",monospace`;
-    const badgeWidth = agent.badgeWidth || ctx.measureText(badgeName).width + 5;
-    const badgeHeight = fontSize + 4;
-    const flipX = (agent.x + size * 1.85 + badgeWidth > innerWidth - 8);
-    const flipY = (agent.flipY || (agent.y + badgeHeight + 16 > innerHeight));
-    const bx = flipX ? -(badgeWidth + 4) : size * 1.85;
-    const by = flipY ? -(badgeHeight + 2) : size * 1.08;
-    ctx.fillStyle = agent.color;
-    ctx.fillRect(bx, by, badgeWidth, badgeHeight);
-    ctx.fillStyle = '#09090b';
-    ctx.fillText(badgeName, bx + 2.5, by + fontSize + .6);
+    ctx.shadowBlur = 0;
+
+    if (innerWidth > 600 || agent.id % 3 === 0) {
+      ctx.font = 'bold 10px monospace';
+      const label = agent.action ? `${agent.name} · ${agent.action}` : agent.name;
+      const textWidth = ctx.measureText(label).width;
+      const badgeWidth = textWidth + 10;
+      ctx.fillStyle = agent.color;
+      drawRoundRect(11, 12, badgeWidth, 17, 3);
+      ctx.fill();
+      ctx.fillStyle = '#09090b';
+      ctx.fillText(label, 16, 24);
+    }
     ctx.restore();
   }
 
   function drawVortex(elapsed) {
     const cx = innerWidth / 2, cy = innerHeight / 2;
-    state.agents.forEach((agent, index) => {
-      const angle = index * 2.39996 + (state.reduced ? 0 : elapsed * 0.006);
-      const radius = 8 + (index % 8) * 3;
+    const l = elapsed / 1000;
+    const activeAgents = state.agents.slice(0, state.targetCount);
+    activeAgents.forEach((agent, index) => {
+      const angle = agent.seed + 2 * l;
+      const radius = 18 + (index % 7) * 7 + 4 * Math.sin(4 * l + index);
       agent.x = cx + Math.cos(angle) * radius;
-      agent.y = cy + Math.sin(angle) * radius * .62;
+      agent.y = cy + Math.sin(angle) * radius;
       agent.history.length = 0;
       drawCursor(agent, elapsed, false);
     });
@@ -714,14 +760,17 @@
   function updateConstructionTask(task, now) {
     if (task.kind === 'section' && task.status === 'queued') return;
     if ((task.status === 'queued' || task.status === 'scheduled') && now >= task.startAt && !startTaskRoute(task, now)) return;
-    if (task.status === 'moving' || task.status === 'dragging' || task.status === 'confirming' || task.status === 'ready' || task.status === 'materializing') {
+    if (task.status === 'moving' || task.status === 'dragging' || task.status === 'confirming' || task.status === 'ready') {
       const scrollDelta = window.scrollY - (task.lastScrollY ?? window.scrollY);
       if (scrollDelta && task.kind === 'section') {
-        task.rect.y -= scrollDelta;
-        task.leadStart.y -= scrollDelta; task.leadEnd.y -= scrollDelta; task.partnerPoint.y -= scrollDelta;
+        if (task.rect) task.rect.y -= scrollDelta;
+        if (task.leadStart) task.leadStart.y -= scrollDelta;
+        if (task.leadEnd) task.leadEnd.y -= scrollDelta;
+        if (task.partnerPoint) task.partnerPoint.y -= scrollDelta;
         if (task.moveFromLead) task.moveFromLead.y -= scrollDelta;
         if (task.moveFromPartner) task.moveFromPartner.y -= scrollDelta;
-        task.lead.y -= scrollDelta; task.partner.y -= scrollDelta;
+        if (task.lead) task.lead.y -= scrollDelta;
+        if (task.partner) task.partner.y -= scrollDelta;
       }
       task.lastScrollY = window.scrollY;
     }
@@ -761,7 +810,8 @@
       return Math.max(finish, item.due + typingDuration + 380);
     }, now);
     task.status = 'materializing';
-    updateLeadActivity('ambient', task.section.dataset.buildSection);
+    task.lead = null;
+    task.partner = null;
   }
 
   function updateSectionMaterializations(now) {
@@ -829,7 +879,12 @@
         }
       }
     }
-    if (state.phase !== 'ambient') {
+    if (state.cinematic.active) {
+      const activeCount = Math.min(state.agents.length, state.targetCount);
+      for (let i = 0; i < activeCount; i++) {
+        drawCursor(state.agents[i], now, !state.reduced);
+      }
+    } else if (state.phase !== 'ambient') {
       state.agents.forEach(agent => { if (!activeAgents.has(agent)) drawCursor(agent, now, !state.reduced && state.count < 80); });
       activeAgents.forEach(agent => drawCursor(agent, now, !state.reduced));
     }
@@ -955,6 +1010,25 @@
     }
   }
 
+  function updateFpsGovernor(now, delta) {
+    state.fpsSamples.push(delta);
+    if (now - state.lastFpsCheck > 500) {
+      const avgDelta = state.fpsSamples.reduce((a, b) => a + b, 0) / Math.max(1, state.fpsSamples.length);
+      const currentFps = Math.round(1000 / Math.max(1, avgDelta));
+      state.fps = currentFps;
+      state.fpsSamples.length = 0;
+      state.lastFpsCheck = now;
+
+      if (state.cinematic.active && state.cinematic.phase === 'tour-down') {
+        if (currentFps < 45 && state.targetCount > 24) {
+          state.targetCount = Math.max(24, state.targetCount - 8);
+        } else if (currentFps >= 52 && state.targetCount < 56) {
+          state.targetCount = Math.min(56, state.targetCount + 6);
+        }
+      }
+    }
+  }
+
   function ensureFrameLoop() {
     if (!state.frame && !document.hidden) state.frame = requestAnimationFrame(drawFrameLoop);
   }
@@ -966,14 +1040,26 @@
     state.lastFrameAt = timestamp;
     state.delta = delta;
     state.clock += delta;
+    updateFpsGovernor(state.clock, delta);
+    if (state.scrollDirty) {
+      state.scrollDirty = false;
+      checkScrollSections();
+    }
     updateTypeJobs(state.clock);
     updateCountJobs(state.clock);
-    updateConstructionTasks(state.clock);
+    if (state.cinematic.active) {
+      updateCinematicSequence(state.clock);
+    } else {
+      updateConstructionTasks(state.clock);
+    }
     ctx.clearRect(0, 0, innerWidth, innerHeight);
-    if (state.phase === 'void') drawVortex(state.clock);
-    else {
+    if (state.cinematic.phase === 'complete') {
+      drawRipples(state.clock);
+    } else if (state.phase === 'void') {
+      drawVortex(state.clock);
+    } else {
       drawConstructionTasks(state.clock);
-      if (state.phase === 'ambient') drawAmbient(state.clock);
+      if (!state.cinematic.active && state.phase === 'ambient') drawAmbient(state.clock);
     }
     drawRipples(state.clock);
     state.frame = requestAnimationFrame(drawFrameLoop);
@@ -997,7 +1083,8 @@
     state.countJobs.clear();
     state.layoutCache = { anchors: null, clickTargets: null, wireTargets: null, dirty: true, updatedAt: -1000 };
     restoreTyped();
-    document.body.classList.remove('phase-ambient', 'phase-wireframe', 'phase-materialize');
+    document.body.classList.remove('phase-ambient', 'phase-wireframe', 'phase-materialize', 'cinematic-tour', 'cinematic-complete');
+    document.documentElement.classList.remove('cinematic-tour', 'cinematic-complete');
     document.body.classList.add('construction-active');
     document.querySelectorAll('.section-built,.section-building,.piece-built,.scan-in').forEach(el => el.classList.remove('section-built', 'section-building', 'piece-built', 'scan-in'));
     document.querySelectorAll('[data-count-running="true"]').forEach(el => delete el.dataset.countRunning);
@@ -1011,11 +1098,270 @@
     phaseLabel('void');
   }
 
-  function replayBuild() {
-    restoreBuildState();
+  function revealAllInstantly() {
+    document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
+      section.classList.remove('section-building');
+      section.classList.add('section-built');
+      section.querySelectorAll('[data-build-piece]').forEach(piece => {
+        piece.classList.add('piece-built');
+        piece.querySelectorAll('[data-count]').forEach(c => {
+          const val = c.dataset.count;
+          const disp = c.querySelector('.count-value');
+          const suffix = c.dataset.suffix || '';
+          if (disp && val) disp.textContent = `${val}${suffix}`;
+        });
+        if (piece.hasAttribute('data-count')) {
+          const val = piece.dataset.count;
+          const disp = piece.querySelector('.count-value');
+          const suffix = piece.dataset.suffix || '';
+          if (disp && val) disp.textContent = `${val}${suffix}`;
+        }
+        if (piece.matches('.portrait-wrap,.hero-portrait-card')) {
+          piece.classList.add('scan-in');
+        }
+      });
+    });
+    for (const [element, job] of state.typeJobs) {
+      job.chars.forEach(char => char.classList.add('typed-in'));
+      element.classList.remove('is-typing');
+    }
+    state.typeJobs.clear();
+    state.countJobs.clear();
+    state.sectionQueue = [];
+    state.sectionBuilds.clear();
+    state.introTasks.forEach(task => { task.status = 'done'; });
+  }
+
+  function ensureAllSectionsBuilt() {
+    document.querySelectorAll('main > [data-build-section], footer[data-build-section]').forEach(section => {
+      section.classList.remove('section-building');
+      section.classList.add('section-built');
+      section.querySelectorAll('[data-build-piece]').forEach(piece => {
+        piece.classList.add('piece-built');
+        piece.querySelectorAll('[data-count]').forEach(c => {
+          const val = c.dataset.count;
+          const disp = c.querySelector('.count-value');
+          const suffix = c.dataset.suffix || '';
+          if (disp && val) disp.textContent = `${val}${suffix}`;
+        });
+        if (piece.hasAttribute('data-count')) {
+          const val = piece.dataset.count;
+          const disp = piece.querySelector('.count-value');
+          const suffix = piece.dataset.suffix || '';
+          if (disp && val) disp.textContent = `${val}${suffix}`;
+        }
+        if (piece.matches('.portrait-wrap,.hero-portrait-card')) {
+          piece.classList.add('scan-in');
+        }
+      });
+    });
+  }
+
+  function startCinematicTourDown(now) {
+    state.cinematic.phase = 'tour-down';
+    state.cinematic.phaseStartClock = now;
+    state.targetCount = 56;
+    document.body.classList.add('cinematic-tour');
+    document.documentElement.classList.add('cinematic-tour');
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    state.cinematic.scrollDuration = clamp(Math.round(maxScroll * 0.75), 3200, 6000);
+    state.cinematic.scrollStartY = window.scrollY;
+    state.cinematic.scrollTargetY = maxScroll;
+  }
+
+  function updateCinematicSwarm(now) {
+    const l = now / 1000;
+    const r = Math.min(state.delta / 16.67, 3);
+    const activeCount = Math.min(state.agents.length, state.targetCount);
+
+    const activeIntroTasks = state.introTasks.filter(t => ['moving', 'dragging', 'confirming', 'ready'].includes(t.status));
+    const activeSectionTasks = [...state.sectionBuilds.values()].filter(t => ['moving', 'dragging', 'confirming', 'ready'].includes(t.status));
+    const allActiveTasks = [...activeIntroTasks, ...activeSectionTasks];
+
+    const assignedAgents = new Map();
+    for (const task of allActiveTasks) {
+      if (task.lead) assignedAgents.set(task.lead, { task, role: 'lead' });
+      if (task.partner) assignedAgents.set(task.partner, { task, role: 'partner' });
+    }
+
+    const visibleBuilt = getVisibleBuiltTargets();
+
+    for (let index = 0; index < activeCount; index++) {
+      const agent = state.agents[index];
+      let targetX, targetY;
+      let action = null;
+      let isAssigned = false;
+
+      if (assignedAgents.has(agent)) {
+        isAssigned = true;
+        const { task, role } = assignedAgents.get(agent);
+        const isTyping = (task.plan?.target === '.hello' || task.plan?.target === '.hero-name' || task.plan?.target === '.hero-bottom' || task.kind === 'section');
+
+        if (role === 'lead') {
+          action = isTyping ? 'typing' : 'resizing';
+          if (task.status === 'dragging') {
+            const p = easeInOut((now - task.dragAt) / task.dragDuration);
+            if (isTyping) {
+              const v = now - task.dragAt;
+              targetX = task.rect.x + Math.min(task.rect.w - 12, 18 + (v / 800) * Math.min(task.rect.w - 30, 200));
+              targetY = task.rect.y + Math.min(task.rect.h - 8, 22);
+            } else {
+              targetX = task.leadStart.x + (task.leadEnd.x - task.leadStart.x) * p;
+              targetY = task.leadStart.y + (task.leadEnd.y - task.leadStart.y) * p;
+            }
+          } else if (task.status === 'moving') {
+            targetX = task.leadStart.x;
+            targetY = task.leadStart.y;
+          } else {
+            targetX = task.leadEnd.x;
+            targetY = task.leadEnd.y;
+          }
+        } else {
+          targetX = task.partnerPoint.x;
+          targetY = task.partnerPoint.y;
+        }
+      } else if (l < 0.35) {
+        const angle = agent.seed + 2 * l;
+        const radius = 18 + (index % 7) * 7 + 4 * Math.sin(4 * l + index);
+        targetX = innerWidth / 2 + Math.cos(angle) * radius;
+        targetY = innerHeight / 2 + Math.sin(angle) * radius;
+      } else {
+        const pool = visibleBuilt.filter(t => !t.element.closest('.topbar'));
+        const activePool = pool.length ? pool : visibleBuilt;
+        const anchor = activePool.length ? activePool[index % activePool.length].rect : { x: innerWidth * 0.5, y: innerHeight * 0.5, w: 200, h: 100 };
+        const iPhase = Math.floor(l / 5 + index / 8);
+        const t = (Math.sin(91.7 * index + 17 * iPhase) + 1) / 2;
+        const rVal = (Math.cos(43.3 * index + 11 * iPhase) + 1) / 2;
+        targetX = anchor.x + anchor.w * t + 14 * Math.sin(0.8 * l + index);
+        targetY = anchor.y + anchor.h * rVal + 12 * Math.cos(0.7 * l + index);
+      }
+
+      const interp = isAssigned ? 0.42 : (1 - Math.pow(l < 0.35 ? 0.82 : 0.965, r));
+      agent.x += (targetX - agent.x) * interp;
+      agent.y += (targetY - agent.y) * interp;
+      agent.action = action;
+
+      agent.history.push({ x: agent.x, y: agent.y, time: now });
+      if (agent.history.length > 7) agent.history.shift();
+    }
+  }
+
+  function updateCinematicSequence(now) {
+    const l = now / 1000;
+    if (l >= 0.35) {
+      const initEl = document.getElementById('swarm-initializing');
+      if (initEl && !initEl.classList.contains('init-hidden')) initEl.classList.add('init-hidden');
+    }
+
+    if (state.cinematic.phase === 'hero') {
+      updateConstructionTasks(now);
+      updateCinematicSwarm(now);
+      if (state.introTasks.length && state.introTasks.every(task => task.status === 'done')) {
+        startCinematicTourDown(now);
+      }
+      return;
+    }
+    if (state.cinematic.phase === 'tour-down') {
+      const elapsed = now - state.cinematic.phaseStartClock;
+      const progress = clamp(elapsed / state.cinematic.scrollDuration, 0, 1);
+      const eased = easeInOut(progress);
+      const currentMax = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const targetY = state.cinematic.scrollStartY + (currentMax - state.cinematic.scrollStartY) * eased;
+      window.scrollTo(0, targetY);
+      checkScrollSections();
+      startQueuedSections(now);
+      for (const task of state.sectionBuilds.values()) updateConstructionTask(task, now);
+      updateSectionMaterializations(now);
+      updateCinematicSwarm(now);
+      if (progress >= 1) {
+        window.scrollTo(0, currentMax);
+        ensureAllSectionsBuilt();
+        state.cinematic.phase = 'bottom-pause';
+        state.cinematic.bottomPauseUntil = now + 650;
+        playSnapSound();
+        for (let i = 0; i < state.targetCount; i += 3) {
+          const ag = state.agents[i];
+          if (ag) state.ripples.push({ x: ag.x, y: ag.y, start: now, color: ag.color });
+        }
+      }
+      return;
+    }
+    if (state.cinematic.phase === 'bottom-pause') {
+      updateCinematicSwarm(now);
+      if (now >= state.cinematic.bottomPauseUntil) {
+        state.cinematic.phase = 'tour-up';
+        state.cinematic.phaseStartClock = now;
+        state.cinematic.scrollStartY = window.scrollY;
+        state.cinematic.scrollDuration = 900;
+      }
+      return;
+    }
+    if (state.cinematic.phase === 'tour-up') {
+      const elapsed = now - state.cinematic.phaseStartClock;
+      const progress = clamp(elapsed / state.cinematic.scrollDuration, 0, 1);
+      const eased = easeInOut(progress);
+      const targetY = (1 - eased) * state.cinematic.scrollStartY;
+      window.scrollTo(0, targetY);
+      const activeCount = Math.min(state.agents.length, state.targetCount);
+      for (let i = 0; i < activeCount; i++) {
+        const ag = state.agents[i];
+        ag.x += (innerWidth * (0.1 + (i % 8) * 0.11) - ag.x) * 0.12;
+        ag.y += (innerHeight * 0.15 - ag.y) * 0.12;
+        ag.history.push({ x: ag.x, y: ag.y, time: now });
+        if (ag.history.length > 7) ag.history.shift();
+      }
+      if (progress >= 1) {
+        window.scrollTo(0, 0);
+        finishCinematicTour();
+      }
+      return;
+    }
+  }
+
+  function finishCinematicTour() {
+    state.cinematic.active = false;
+    state.cinematic.phase = 'complete';
+    document.body.classList.remove('cinematic-tour');
+    document.documentElement.classList.remove('cinematic-tour');
+    document.body.classList.add('cinematic-complete');
+    document.body.classList.add('phase-ambient');
+    state.agents.forEach(agent => {
+      agent.history.length = 0;
+      agent.vx = 0;
+      agent.vy = 0;
+      agent.motion = null;
+    });
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ensureAllSectionsBuilt();
+    startSectionObserver();
+  }
+
+  function cancelCinematicIntro() {
+    if (!state.cinematic.active) return;
+    state.cinematic.active = false;
+    state.cinematic.interrupted = true;
+    document.getElementById('swarm-initializing')?.classList.add('init-hidden');
+    revealAllInstantly();
+    finishCinematicTour();
+  }
+
+  function onUserInterrupt(event) {
+    if (!state.cinematic.active) return;
+    if (event.type === 'keydown') {
+      const navKeys = ['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space', ' ', 'Home', 'End'];
+      if (!navKeys.includes(event.key)) return;
+    }
+    cancelCinematicIntro();
+  }
+
+  function startCinematicIntro() {
+    state.cinematic.active = true;
+    state.cinematic.interrupted = false;
+    state.cinematic.phase = 'hero';
+    state.cinematic.phaseStartClock = 0;
+    state.targetCount = 20;
     state.phase = 'void';
-    status.textContent = `INITIALIZING ${state.agents.length} COLLABORATIVE AGENTS...`;
-    updateLeadActivity('void');
+    document.getElementById('swarm-initializing')?.classList.remove('init-hidden');
     state.agents.forEach(agent => {
       agent.x = innerWidth / 2;
       agent.y = innerHeight / 2;
@@ -1024,8 +1370,21 @@
       agent.targetKey = -1;
       agent.lastClick = -10000;
       agent.pendingRipple = null;
+      agent.action = null;
     });
+    if (state.reduced || isMobile) {
+      revealAllInstantly();
+      finishCinematicTour();
+      return;
+    }
     ensureFrameLoop();
+  }
+
+  function replayBuild() {
+    document.documentElement.classList.add('cinematic-tour');
+    window.scrollTo(0, 0);
+    restoreBuildState();
+    startCinematicIntro();
   }
 
   /* DEV_ONLY_START:PROFILE_EDITOR */
@@ -1066,26 +1425,6 @@
   }
   /* DEV_ONLY_END:PROFILE_EDITOR */
 
-  function setMode(mode) {
-    state.mode = mode;
-    state.agents.forEach(agent => { agent.motion = null; agent.vx = 0; agent.vy = 0; agent.restUntil = state.clock + 350; });
-    document.body.classList.toggle('mode-wireframe', mode === 'wireframe');
-    document.body.classList.toggle('mode-follow', mode === 'follow');
-    if (state.phase === 'ambient') {
-      const labels = { collab: 'Collaborating across visible components', wireframe: 'Inspecting blueprint coordinates', follow: 'Following the pointer together' };
-      ['designer', 'frontend', 'motion', 'content'].forEach(role => {
-        const row = document.querySelector(`[data-role-activity="${role}"]`);
-        row.querySelector('small').textContent = labels[mode];
-        row.querySelector('span').textContent = mode === 'collab' ? 'EDIT' : mode.toUpperCase();
-      });
-    }
-    document.querySelectorAll('[data-mode-choice]').forEach(button => {
-      const selected = button.dataset.modeChoice === mode;
-      button.classList.toggle('selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
-  }
-
   function applyReducedMotion() {
     if (!state.reduced) return;
     state.agents.forEach(agent => { agent.motion = null; agent.vx = 0; agent.vy = 0; agent.history.length = 0; });
@@ -1111,6 +1450,20 @@
   resizeCanvas();
   window.addEventListener('resize', () => { resizeCanvas(); state.layoutCache.dirty = true; }, { passive: true });
   window.addEventListener('scroll', () => { state.layoutCache.dirty = true; }, { passive: true });
+  window.addEventListener('load', () => { state.layoutCache.dirty = true; });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { state.layoutCache.dirty = true; });
+  }
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => { state.layoutCache.dirty = true; });
+    ro.observe(document.body);
+  }
+  document.addEventListener('error', event => {
+    if (event.target && event.target.tagName === 'IMG') {
+      event.target.classList.add('img-failed');
+      state.layoutCache.dirty = true;
+    }
+  }, true);
   window.addEventListener('pointermove', event => {
     state.mouse.x = event.clientX;
     state.mouse.y = event.clientY;
@@ -1118,31 +1471,6 @@
   }, { passive: true });
   window.addEventListener('pointerleave', () => { state.mouse.active = false; });
 
-  document.querySelectorAll('[data-count-choice]').forEach(button => button.addEventListener('click', () => makeAgents(Number(button.dataset.countChoice))));
-  document.querySelectorAll('[data-mode-choice]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.modeChoice)));
-  byId('activity-collapse').addEventListener('click', event => {
-    const collapsed = document.body.classList.toggle('activity-collapsed');
-    event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
-    event.currentTarget.setAttribute('aria-label', collapsed ? 'Expand activity list' : 'Collapse activity list');
-    event.currentTarget.textContent = collapsed ? '+' : '−';
-  });
-  byId('replay-build').addEventListener('click', replayBuild);
-  byId('sound-toggle').addEventListener('click', event => {
-    state.sound = !state.sound;
-    if (state.sound) initializeAudio();
-    event.currentTarget.setAttribute('aria-pressed', String(state.sound));
-    event.currentTarget.querySelector('span').textContent = `SOUND ${state.sound ? 'ON' : 'OFF'}`;
-    if (state.sound) mechanicalClick();
-  });
-  byId('motion-mode').addEventListener('click', event => {
-    state.reduced = !state.reduced;
-    document.body.classList.toggle('motion-reduced', state.reduced);
-    makeAgents(state.count);
-    applyReducedMotion();
-    event.currentTarget.setAttribute('aria-pressed', String(state.reduced));
-    event.currentTarget.querySelector('span').textContent = state.reduced ? 'MOTION REDUCED' : 'MOTION FULL';
-    if (state.phase !== 'ambient') replayBuild();
-  });
   const menuToggle = document.querySelector('.menu-toggle');
   const topbar = document.querySelector('.topbar');
   if (menuToggle && topbar) {
@@ -1174,15 +1502,6 @@
       }
     });
   }
-  if (isMobile) {
-    document.body.classList.add('activity-collapsed');
-    const collapseBtn = byId('activity-collapse');
-    if (collapseBtn) {
-      collapseBtn.setAttribute('aria-expanded', 'false');
-      collapseBtn.setAttribute('aria-label', 'Expand activity list');
-      collapseBtn.textContent = '+';
-    }
-  }
   /* DEV_ONLY_START:PROFILE_EDITOR */
   byId('inspect-toggle').addEventListener('click', () => openDrawer(drawer.hidden));
   byId('inspect-close').addEventListener('click', () => openDrawer(false));
@@ -1205,17 +1524,18 @@
   /* DEV_ONLY_END:PROFILE_EDITOR */
 
   if (state.reduced) document.body.classList.add('motion-reduced');
-  byId('motion-mode').setAttribute('aria-pressed', String(state.reduced));
-  byId('motion-mode').querySelector('span').textContent = state.reduced ? 'MOTION REDUCED' : 'MOTION FULL';
   reducePreference.addEventListener('change', event => {
     state.reduced = event.matches;
     document.body.classList.toggle('motion-reduced', state.reduced);
     makeAgents(state.count);
     applyReducedMotion();
-    byId('motion-mode').setAttribute('aria-pressed', String(state.reduced));
-    byId('motion-mode').querySelector('span').textContent = state.reduced ? 'MOTION REDUCED' : 'MOTION FULL';
     if (state.phase !== 'ambient') replayBuild();
   });
+  window.addEventListener('wheel', onUserInterrupt, { passive: true });
+  window.addEventListener('touchmove', onUserInterrupt, { passive: true });
+  window.addEventListener('pointerdown', onUserInterrupt, { passive: true });
+  window.addEventListener('keydown', onUserInterrupt);
+
   phaseLabel('void');
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -1224,5 +1544,12 @@
       state.lastFrameAt = null;
     } else ensureFrameLoop();
   });
+
+  if (state.reduced || isMobile) {
+    revealAllInstantly();
+    finishCinematicTour();
+  } else {
+    window.scrollTo(0, 0);
+  }
   ensureFrameLoop();
 })();

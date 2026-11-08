@@ -10,3 +10,13 @@ npm-debug.log*
 .aws/
 .agents/
 .codex/
+
+# Scratch and test artifacts
+scratch/
+ref-*
+reference-*
+*.png
+*.webp
+!assets/*.png
+!assets/*.webp
+

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="robots" content="noindex, nofollow">
+  <title>PS. Console — Developer Portfolio Admin</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0a0a'/%3E%3Ctext x='7' y='22' font-family='Space Grotesk,sans-serif' font-size='15' font-weight='700' fill='%23f3f0e9'%3EPS%3C/text%3E%3Ccircle cx='26' cy='21' r='2' fill='%23ed402e'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <!-- Authentication Gate Container -->
+  <div id="auth-gate" class="auth-gate" hidden>
+    <div class="auth-panel">
+      <div class="auth-header">
+        <a class="brand" href="/">PS<span>.</span></a>
+        <span class="mono header-tag">ADMINISTRATION CONSOLE</span>
+      </div>
+      <h2>Secure <i>Access</i></h2>
+      <p class="auth-desc">Authenticate with administrator credentials to manage portfolio content, assets, and publication releases.</p>
+      <form id="login-form" class="auth-form" autocomplete="off">
+        <div class="form-group">
+          <label for="login-email" class="mono">ADMINISTRATOR EMAIL</label>
+          <input type="email" id="login-email" required placeholder="admin@domain.com" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="login-password" class="mono">PASSWORD</label>
+          <input type="password" id="login-password" required placeholder="••••••••••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" id="login-submit" class="admin-btn admin-btn-primary full-width">
+          AUTHENTICATE SESSION <span>→</span>
+        </button>
+      </form>
+      <div id="auth-error" class="auth-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- Main Administrative App Container -->
+  <div id="admin-app" class="admin-layout" hidden>
+    <!-- Topbar -->
+    <header class="admin-topbar">
+      <div class="topbar-left">
+        <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle Navigation">☰</button>
+        <a class="brand" href="/">PS<span>.</span></a>
+        <span class="telemetry-chip live mono"><i class="status-dot live"></i> ONLINE</span>
+        <span class="telemetry-chip mono" id="topbar-version">VER: --</span>
+      </div>
+      <div class="topbar-right">
+        <span class="admin-identity mono" id="topbar-user">USER: Loading...</span>
+        <button id="btn-preview-modal" class="admin-btn" type="button">PREVIEW DRAFTS ↗</button>
+        <button id="btn-logout" class="admin-btn admin-btn-danger" type="button">LOGOUT</button>
+      </div>
+    </header>
+
+    <div class="admin-body">
+      <!-- Sidebar Navigation -->
+      <aside class="admin-sidebar" id="admin-sidebar">
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-tab="telemetry" type="button">
+            <span class="nav-icon">▦</span> <span class="nav-label">Telemetry &amp; Status</span>
+          </button>
+          <button class="nav-item" data-tab="projects" type="button">
+            <span class="nav-icon">◈</span> <span class="nav-label">Projects Manager</span>
+          </button>
+          <button class="nav-item" data-tab="skills" type="button">
+            <span class="nav-icon">✳</span> <span class="nav-label">Skills &amp; Toolkit</span>
+          </button>
+          <button class="nav-item" data-tab="experience" type="button">
+            <span class="nav-icon">▤</span> <span class="nav-label">Experience</span>
+          </button>
+          <button class="nav-item" data-tab="certifications" type="button">
+            <span class="nav-icon">◉</span> <span class="nav-label">Certifications</span>
+          </button>
+          <button class="nav-item" data-tab="media" type="button">
+            <span class="nav-icon">◫</span> <span class="nav-label">Media &amp; Resume</span>
+          </button>
+          <button class="nav-item" data-tab="settings" type="button">
+            <span class="nav-icon">⚙</span> <span class="nav-label">Site Settings</span>
+          </button>
+          <button class="nav-item" data-tab="audit" type="button">
+            <span class="nav-icon">◷</span> <span class="nav-label">Audit Logs &amp; History</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="draft-meter">
+            <div class="draft-meter-head mono">
+              <span>PENDING DRAFTS</span>
+              <strong id="sidebar-draft-count">0</strong>
+            </div>
+            <div class="draft-meter-bar"><i id="sidebar-draft-progress"></i></div>
+          </div>
+          <button id="btn-publish-all" class="admin-btn admin-btn-primary full-width" type="button">
+            PUBLISH CHANGES ✳
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Workspace Views -->
+      <main class="admin-main">
+        <!-- 1. Telemetry & Overview Tab -->
+        <section id="pane-telemetry" class="admin-pane active">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">SYSTEM TELEMETRY</span>
+              <h2>Overview &amp; <i>Status</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn" id="btn-refresh-data" type="button">↻ REFRESH DATA</button>
+            </div>
+          </div>
+          <div class="telemetry-grid">
+            <div class="telemetry-card">
+              <span class="mono card-label">LIVE PUBLICATION VERSION</span>
+              <b class="stat-value" id="stat-live-version">1</b>
+              <small class="mono card-sub" id="stat-published-time">Active on production CDN</small>
+            </div>
+            <div class="telemetry-card">
+              <span class="mono card-label">UNPUBLISHED DRAFT REVISIONS</span>
+              <b class="stat-value text-amber" id="stat-pending-drafts">0</b>
+              <small class="mono card-sub">Pending review before release</small>
+            </div>
+            <div class="telemetry-card">
+              <span class="mono card-label">ACTIVE PROJECTS LIVE</span>
+              <b class="stat-value" id="stat-active-projects">7</b>
+              <small class="mono card-sub">Visible on public portfolio</small>
+            </div>
+            <div class="telemetry-card">
+              <span class="mono card-label">STORAGE CATALOG</span>
+              <b class="stat-value" id="stat-media-count">2</b>
+              <small class="mono card-sub">Private bucket objects tracked</small>
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="section-title-row">
+              <h3>Recent Security &amp; Mutation <i>Events</i></h3>
+              <button class="admin-btn" data-tab="audit" type="button">VIEW COMPLETE AUDIT TRAIL →</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table" id="table-recent-audit">
+                <thead>
+                  <tr>
+                    <th class="mono">TIMESTAMP</th>
+                    <th class="mono">ACTION</th>
+                    <th class="mono">ENTITY</th>
+                    <th class="mono">IP ADDRESS</th>
+                    <th class="mono">DETAILS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="5" class="empty-cell">Loading recent audit events...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Projects Manager Tab -->
+        <section id="pane-projects" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">PORTFOLIO BUILDS</span>
+              <h2>Projects <i>Manager</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn admin-btn-primary" id="btn-new-project" type="button">+ NEW PROJECT DRAFT</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="table-projects">
+              <thead>
+                <tr>
+                  <th class="mono">ORDER</th>
+                  <th class="mono">IDENTIFIER</th>
+                  <th class="mono">TITLE &amp; CATEGORY</th>
+                  <th class="mono">STATUS</th>
+                  <th class="mono">VERSION</th>
+                  <th class="mono text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="6" class="empty-cell">Loading projects...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 3. Skills & Toolkit Tab -->
+        <section id="pane-skills" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">TECHNICAL CAPABILITIES</span>
+              <h2>Skills &amp; <i>Toolkit</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn" id="btn-new-category" type="button">+ NEW CATEGORY</button>
+              <button class="admin-btn admin-btn-primary" id="btn-new-skill" type="button">+ ADD SKILL DRAFT</button>
+            </div>
+          </div>
+          <div id="skills-container" class="skills-categories-list">
+            <!-- Dynamically populated categories and skill chips -->
+          </div>
+        </section>
+
+        <!-- 4. Experience Tab -->
+        <section id="pane-experience" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">PRACTICE &amp; WORK</span>
+              <h2>Experience <i>Manager</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn admin-btn-primary" id="btn-new-experience" type="button">+ NEW EXPERIENCE DRAFT</button>
+            </div>
+          </div>
+          <div class="experience-list" id="experience-container">
+            <!-- Dynamically populated experience cards -->
+          </div>
+        </section>
+
+        <!-- 5. Certifications Tab -->
+        <section id="pane-certifications" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">CREDENTIALS &amp; PARTICIPATION</span>
+              <h2>Certifications <i>Manager</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn admin-btn-primary" id="btn-new-certification" type="button">+ NEW CERTIFICATION DRAFT</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="table-certifications">
+              <thead>
+                <tr>
+                  <th class="mono">ORDER</th>
+                  <th class="mono">MARK</th>
+                  <th class="mono">TITLE &amp; ISSUER</th>
+                  <th class="mono">STATUS</th>
+                  <th class="mono text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" class="empty-cell">Loading certifications...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 6. Media & Resume Dropzone Tab -->
+        <section id="pane-media" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">SECURE PRIVATE ASSETS</span>
+              <h2>Media &amp; <i>Resume</i></h2>
+            </div>
+          </div>
+          <div class="upload-zone" id="media-dropzone">
+            <div class="dropzone-inner">
+              <span class="dropzone-icon">⇪</span>
+              <h3>Drag &amp; Drop Assets to Staging</h3>
+              <p class="dropzone-hint">Upload resume PDF (Max 5MB) or web images (WebP, PNG, JPEG). Files are stored privately and published explicitly.</p>
+              <input type="file" id="media-file-input" hidden accept=".pdf,.webp,.png,.jpg,.jpeg">
+              <button class="admin-btn admin-btn-primary" type="button" id="btn-browse-file">SELECT LOCAL FILE</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h3>Stored Private <i>Assets</i></h3>
+            <div class="table-wrap">
+              <table class="data-table" id="table-media">
+                <thead>
+                  <tr>
+                    <th class="mono">FILENAME</th>
+                    <th class="mono">TYPE</th>
+                    <th class="mono">SIZE</th>
+                    <th class="mono">STATUS</th>
+                    <th class="mono">SHA-256 HASH</th>
+                    <th class="mono text-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="6" class="empty-cell">Loading stored assets...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. Site Settings Tab -->
+        <section id="pane-settings" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">PROFILE CONFIGURATION</span>
+              <h2>Site <i>Settings</i></h2>
+            </div>
+            <div class="header-actions">
+              <button class="admin-btn admin-btn-primary" id="btn-save-settings" type="button">SAVE SETTINGS DRAFT</button>
+            </div>
+          </div>
+          <form id="form-settings" class="settings-grid" autocomplete="off">
+            <div class="form-group">
+              <label for="set-profile-name" class="mono">FULL NAME</label>
+              <input type="text" id="set-profile-name" required>
+            </div>
+            <div class="form-group">
+              <label for="set-role-title" class="mono">ROLE TITLE</label>
+              <input type="text" id="set-role-title" required>
+            </div>
+            <div class="form-group full-col">
+              <label for="set-eyebrow-bio" class="mono">EYEBROW GREETING</label>
+              <input type="text" id="set-eyebrow-bio" required>
+            </div>
+            <div class="form-group full-col">
+              <label for="set-full-bio" class="mono">FULL ABOUT BIOGRAPHY</label>
+              <textarea id="set-full-bio" rows="4" required></textarea>
+            </div>
+            <div class="form-group">
+              <label for="set-email" class="mono">PRIMARY CONTACT EMAIL</label>
+              <input type="email" id="set-email" required>
+            </div>
+            <div class="form-group">
+              <label for="set-github" class="mono">GITHUB PROFILE URL</label>
+              <input type="url" id="set-github" required>
+            </div>
+            <div class="form-group">
+              <label for="set-linkedin" class="mono">LINKEDIN PROFILE URL</label>
+              <input type="url" id="set-linkedin" required>
+            </div>
+            <div class="form-group">
+              <label for="set-cgpa" class="mono">B.TECH CGPA METRIC</label>
+              <input type="number" step="0.01" min="0" max="10" id="set-cgpa" required>
+            </div>
+            <div class="form-group">
+              <label for="set-class12" class="mono">CLASS XII PERCENTAGE</label>
+              <input type="number" step="0.01" min="0" max="100" id="set-class12" required>
+            </div>
+            <div class="form-group">
+              <label for="set-class10" class="mono">CLASS X PERCENTAGE</label>
+              <input type="number" step="0.01" min="0" max="100" id="set-class10" required>
+            </div>
+          </form>
+        </section>
+
+        <!-- 8. Audit Logs & Publication History Tab -->
+        <section id="pane-audit" class="admin-pane">
+          <div class="pane-header">
+            <div>
+              <span class="mono kicker">NON-REPUDIATION AUDIT TRAIL</span>
+              <h2>History &amp; <i>Audit</i></h2>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h3>Publication Snapshots <i>(Rollback Points)</i></h3>
+            <div class="table-wrap">
+              <table class="data-table" id="table-snapshots">
+                <thead>
+                  <tr>
+                    <th class="mono">VERSION</th>
+                    <th class="mono">TIMESTAMP</th>
+                    <th class="mono">PUBLISHED BY</th>
+                    <th class="mono">NOTES</th>
+                    <th class="mono text-right">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="5" class="empty-cell">Loading publication snapshots...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h3>Complete Audit <i>Log</i></h3>
+            <div class="table-wrap">
+              <table class="data-table" id="table-full-audit">
+                <thead>
+                  <tr>
+                    <th class="mono">TIMESTAMP</th>
+                    <th class="mono">ACTION</th>
+                    <th class="mono">ENTITY TYPE</th>
+                    <th class="mono">ENTITY ID</th>
+                    <th class="mono">IP ADDRESS</th>
+                    <th class="mono">DETAILS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colspan="6" class="empty-cell">Loading audit logs...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Reusable Modal Dialog -->
+  <dialog id="admin-modal" class="admin-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal Title</h3>
+        <button id="modal-close" class="modal-close-btn" type="button">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body">
+        <!-- Injected form or content -->
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

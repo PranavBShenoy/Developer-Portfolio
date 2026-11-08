@@ -88,11 +88,9 @@ pass(javascript.includes('function updateTypeJobs(now)') && javascript.includes(
 pass(javascript.includes('state.sectionQueue = [];') && javascript.includes('state.introTasks = [];') && javascript.includes('state.typeJobs.clear();') && javascript.includes('state.countJobs.clear();') && javascript.includes('state.clock = 0;'), 'Replay Build resets its queues and active jobs without starting another loop');
 pass(javascript.includes('cancelAnimationFrame(state.frame)') && javascript.includes('document.addEventListener(\'visibilitychange\''), 'animation loop pauses when the page is hidden and resumes once');
 pass(javascript.includes('state.reduced ? 24') && javascript.includes('applyReducedMotion()') && stylesheet.includes('prefers-reduced-motion:reduce'), 'reduced motion lowers cursor work and shortens active construction');
-pass(stylesheet.includes('body.construction-active{background:#000') && stylesheet.includes('.construction-status{position:fixed') && !stylesheet.includes('body.construction-active:not(.phase-wireframe):not(.phase-materialize) .construction-status'), 'initial black void keeps its initialization status visible');
-for (const id of ['replay-build','sound-toggle','motion-mode','activity-collapse']) {
-  pass(publicJavascript.includes(`byId('${id}').addEventListener(`), `public control handler exists for ${id}`);
-}
-pass(publicJavascript.includes("querySelectorAll('[data-count-choice]')") && publicJavascript.includes("querySelectorAll('[data-mode-choice]')") && publicJavascript.includes('new IntersectionObserver'), 'public cursor count, collaboration mode and scroll construction controls remain wired');
+pass(stylesheet.includes('body.construction-active{background:#000'), 'initial black void styling is present');
+pass(!/replay-build|sound-toggle|motion-mode|activity-collapse|data-count-choice|data-mode-choice|canvas-dock|agent-activity-panel|construction-status/.test(html + publicJavascript), 'production HTML and public JavaScript exclude developer dock and activity controls');
+pass(publicJavascript.includes('new IntersectionObserver'), 'scroll construction observer remains wired');
 pass(config.headers.some(rule => rule.source === '/assets/(.*)' && rule.headers.some(header => header.key.toLowerCase() === 'cache-control' && /immutable/.test(header.value))), 'fingerprinted assets receive immutable caching');
 pass(config.headers.some(rule => ['/', '/index.html'].includes(rule.source) && rule.headers.some(header => header.key.toLowerCase() === 'cache-control' && /max-age=0, must-revalidate/.test(header.value))), 'HTML revalidates on each request');
 for (const name of ['content-security-policy','strict-transport-security','x-content-type-options','x-frame-options','referrer-policy','permissions-policy','cross-origin-resource-policy']) {

@@ -4,7 +4,9 @@
 
 - Connect this repository to Vercel with the project root set to this directory.
 - The checked-in `vercel.json` runs `node scripts/build.mjs` and publishes only `dist/`.
-- No framework, server runtime, API routes, environment variables, or install dependencies are required. The build command uses Node's built-in modules only.
+- Backend serverless functions (`api/admin/*`, `api/cron/*`, `api/public/*`) use standard Node.js ES modules without heavy third-party runtime dependencies.
+- Configure all required environment variables in Vercel Project Settings (see `.env.example` and `SUPABASE_KEEPALIVE_AND_PUBLISHING.md`).
+- For production, configure: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, and `VERCEL_DEPLOY_HOOK_URL`.
 - Use the Vercel-provided HTTPS endpoint. Add a custom domain in Project Settings and complete the DNS verification before sharing it.
 
 ## Before each deployment

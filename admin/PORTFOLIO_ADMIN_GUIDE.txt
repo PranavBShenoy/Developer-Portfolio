@@ -1,0 +1,171 @@
+PORTFOLIO CMS — ADMIN & PUBLISHING GUIDE
+
+Repository GitHub: https://github.com/PranavBShenoy/Developer-Portfolio
+Production URL: https://pranav-shenoy-portfolio.vercel.app Working
+branch: antigravity-updates
+
+PURPOSE This guide explains how to use the portfolio admin panel, save
+content, publish changes to Supabase, rebuild the local static website,
+and verify it.
+
+IMPORTANT SAFETY RULES - Work only on antigravity-updates. - Do not
+commit, push, merge, or deploy without explicit approval. - Do not
+modify main. - Review drafts before publishing. - Never expose the
+Supabase service-role key in frontend code or public files. - Keep the
+portfolio-storage Supabase bucket private. - The local commands in this
+guide do NOT update the Vercel production website.
+
+1.  OPEN THE ADMIN PANEL From the repository root, start the custom
+    local development server:
+
+node –env-file=.env.local
+/home/pranav/.gemini/antigravity/brain/3589e523-fba5-4dc3-b6cb-6705b01c05d6/scratch/dev-server.mjs
+
+Open: http://127.0.0.1:3000/admin
+
+Use this custom server for CMS administration. Do not use npx serve dist
+for admin work: a static file server cannot handle the /api routes, so
+admin requests may return 404.
+
+Stop the server with Ctrl+C in its terminal.
+
+2.  EDIT PROJECTS
+
+1)  Open Projects Manager.
+2)  Select a project and click Edit.
+3)  Enter Short Description and Tech Stack.
+4)  Click Save Draft.
+5)  Reopen the project and verify the values.
+6)  Refresh the entire admin page, reopen the project, and verify again.
+
+Field mapping: - short_description -> summary - tech_stack -> tags -
+live_url -> demo_url - sort_order -> display_order
+
+A save confirmation alone is not enough. Confirm values survive a full
+page refresh.
+
+3.  EDIT CERTIFICATIONS
+
+1)  Open Certifications.
+2)  Create or edit a certificate.
+3)  Enter name, issuing organization, date, and credential URL.
+4)  Upload an image if available and check its preview.
+5)  Save as draft.
+6)  Reopen the certificate and verify the fields and image are retained.
+
+The Credential / Verification URL field must contain a normal URL or be
+empty. Do not paste serialized JSON into it.
+
+Storage configuration: - Bucket: portfolio-storage - Visibility:
+PRIVATE - Maximum file size: 5 MB - Allowed MIME types: JPEG, PNG, WebP,
+PDF
+
+The bucket was manually created after an earlier NoSuchBucket error. If
+upload fails, capture the exact error and investigate the bucket,
+Storage policies, and upload API. Do not make the bucket public as a
+workaround.
+
+4.  SAVE DRAFTS AND PUBLISH Save Draft stores edits as drafts. It does
+    not by itself update the public static website.
+
+Publish Changes publishes approved drafts to the Supabase publication
+snapshot. Wait for the success message.
+
+Publishing to Supabase and rebuilding the static website are separate
+steps.
+
+Before publishing, review project names, descriptions, tech stacks,
+URLs, sort order, certificate names, issuers, dates, credential URLs,
+and images. Check that archived items are intentionally archived.
+
+5.  UPDATE THE LOCAL STATIC WEBSITE After publication, rebuild the local
+    static website from the published Supabase content.
+
+Stop the local server with Ctrl+C, then run these commands from the
+repository root.
+
+Command 1 — Build: node –env-file=.env.local scripts/build.mjs
+
+Command 2 — Verify: node scripts/verify-build.mjs
+
+If either command fails, stop and investigate. Do not assume the site
+updated.
+
+Restart the custom local server: node –env-file=.env.local
+/home/pranav/.gemini/antigravity/brain/3589e523-fba5-4dc3-b6cb-6705b01c05d6/scratch/dev-server.mjs
+
+Open: http://127.0.0.1:3000/
+
+Hard-refresh: Ctrl+Shift+R
+
+Usual workflow: SAVE DRAFTS -> REVIEW -> PUBLISH CHANGES -> BUILD ->
+VERIFY -> RESTART SERVER IF NEEDED -> HARD REFRESH -> CHECK LOCAL
+WEBSITE
+
+6.  WHAT THESE COMMANDS DO node --env-file=.env.local scripts/build.mjs
+
+-   Fetches published content and generates the static website in dist/.
+-   Uses local environment variables for build-time access.
+-   Does not commit, push, merge, or deploy.
+
+node scripts/verify-build.mjs - Checks the generated static build. -
+Does not publish or deploy.
+
+The custom dev server serves the local website and handles local admin
+API routes. It does not deploy to Vercel.
+
+These commands update the local website only. The Vercel production URL
+stays unchanged until a separate production deployment is explicitly
+approved.
+
+7.  CERTIFICATE IMAGE TROUBLESHOOTING Earlier error: Storage upload
+    failed: 404 Bucket not found (NoSuchBucket)
+
+The portfolio-storage bucket was subsequently created and verified. That
+does not by itself prove uploads or static image bundling work end to
+end.
+
+If an image is missing on the local public website: 1) Check
+certificate_image_url on the certificate record. 2) Check that the image
+object exists in the private portfolio-storage bucket. 3) Check build
+output for image download or permission errors. 4) Check whether the
+image was copied into dist/ and referenced by generated HTML. 5) Check
+browser Network and Console errors.
+
+The public website is static and should not make runtime Supabase
+requests. Private images must be fetched securely during the build and
+bundled into the static output. Never expose the service-role key or
+make the bucket public just to make images display.
+
+8.  QUICK TROUBLESHOOTING Admin page/API returns 404:
+
+-   Confirm the custom dev server is running.
+-   Do not use npx serve dist for admin API testing.
+-   Use http://127.0.0.1:3000/admin (one slash before admin).
+
+Project description or tech stack disappears: - Save the draft, refresh
+the admin page, reopen the project, and verify. - The canonical database
+fields are summary and tags. - Do not populate all projects until
+persistence is confirmed.
+
+Credential field shows JSON: - Do not save that value. - Credential /
+Verification URL should contain a URL, not serialized JSON.
+
+Certificate image upload fails: - Capture the exact error. - Confirm the
+private portfolio-storage bucket exists. - Check Storage policies and
+API upload handling. - Do not recreate the bucket blindly.
+
+Published content does not appear locally: - Supabase publication and
+static build are separate. - Run the build and verification commands in
+Section 5. - Hard-refresh the local website.
+
+9.  BEFORE ANY PRODUCTION DEPLOYMENT Review the complete git diff.
+    Confirm the branch is antigravity-updates. Check that no secrets or
+    environment files are tracked. Run the relevant tests and build
+    verification. Verify project and certificate content and images
+    locally. Review CSP and ensure the service-role key is not in dist/.
+
+Obtain explicit approval before any commit, push, merge, or deployment.
+Do not set VERCEL_DEPLOY_HOOK_URL; it is intentionally unset.
+
+END OF GUIDE

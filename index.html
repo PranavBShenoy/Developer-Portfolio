@@ -28,16 +28,8 @@
 <body class="construction-active">
   <div class="grain" aria-hidden="true"></div>
   <canvas id="construction-canvas" aria-hidden="true"></canvas>
-  <div class="construction-status" aria-live="polite"><i></i><span>INITIALIZING 56 COLLABORATIVE AGENTS...</span><small>DETERMINISTIC SIMULATION · NO AI CONNECTED</small></div>
-  <aside class="agent-activity-panel" aria-label="Collaboration activity">
-    <div class="activity-head"><span class="mono">LEAD AGENTS / SIMULATED</span><button id="activity-collapse" type="button" aria-expanded="true" aria-label="Collapse activity list">−</button></div>
-    <div class="activity-row" data-role-activity="designer"><i></i><div><b>DESIGNER</b><small>Joining the layout pass</small></div><span>PLAN</span></div>
-    <div class="activity-row" data-role-activity="frontend"><i></i><div><b>FRONTEND</b><small>Mapping components</small></div><span>BUILD</span></div>
-    <div class="activity-row" data-role-activity="motion"><i></i><div><b>MOTION</b><small>Preparing interactions</small></div><span>TUNE</span></div>
-    <div class="activity-row" data-role-activity="content"><i></i><div><b>CONTENT</b><small>Sequencing portfolio copy</small></div><span>WRITE</span></div>
-    <div class="activity-disclosure mono">DETERMINISTIC SIMULATION · NO LIVE AI</div>
-  </aside>
-  <header class="topbar" data-build-section="navigation">
+  <div class="initializing" id="swarm-initializing" aria-hidden="true"><span class="pulse-dot"></span> INITIALIZING <span id="swarm-count-label">20</span> COLLABORATIVE AGENTS <span class="init-muted">// CONNECTING TO CANVAS</span></div>
+  <header class="topbar" data-build="NAV_BAR" data-build-section="navigation">
     <a class="brand" data-build-piece="logo" href="#home" aria-label="Pranav Shenoy home">PS<span>.</span></a>
     <nav aria-label="Main navigation">
       <a data-build-piece="navlink" href="#about">ABOUT</a><a data-build-piece="navlink" href="#projects">PROJECTS</a><a data-build-piece="navlink" href="#toolkit">TOOLKIT</a><a data-build-piece="navlink" href="#experience">EXPERIENCE</a><a data-build-piece="navlink" href="#contact">CONTACT</a>
@@ -129,24 +121,8 @@
     <section class="contact section-pad" id="contact" data-build-section="contact"><div class="section-kicker mono"><span>05 / CONTACT</span><span>OPEN CHANNEL</span></div><p class="hello">Have a good one in mind?</p><h2>Let’s make<br><i>it matter.</i></h2><a class="contact-cta" data-build-piece="contact-cta" href="mailto:nnm24is160@nmamit.in">SAY HELLO <span>↗</span></a><div class="contact-links" data-build-piece="contact-links"><a href="mailto:nnm24is160@nmamit.in">NNM24IS160@NMAMIT.IN <span>↗</span></a><a href="https://github.com/PranavBShenoy" target="_blank" rel="noopener noreferrer">GITHUB <span>↗</span></a><a href="https://www.linkedin.com/in/pranav-shenoy-b54288312" target="_blank" rel="noopener noreferrer">LINKEDIN <span>↗</span></a><a href="assets/pranav-shenoy-resume.pdf" target="_blank" rel="noopener noreferrer" download="Pranav-Shenoy-Resume.pdf">DOWNLOAD RESUME <span>↗</span></a></div></section>
   </main>
   <footer class="footer mono" data-build-section="footer"><a class="brand" data-build-piece="footer-brand" href="#home">PS<span>.</span></a><span>DESIGNED &amp; BUILT BY PRANAV SHENOY</span><a href="#home">BACK TO TOP ↑</a><span>© 2026</span></footer>
-  <div class="canvas-dock" role="toolbar" aria-label="Construction canvas controls">
-    <span class="dock-brand"><b>PS</b><small>BUILD CANVAS</small></span>
-    <button class="dock-button" id="replay-build" type="button">↻ <span>REPLAY BUILD</span></button>
-    <div class="dock-group" role="group" aria-label="Cursor count">
-      <span class="dock-label">CURSORS</span><button class="count-option" data-count-choice="20" aria-pressed="false">20</button><button class="count-option selected" data-count-choice="56" aria-pressed="true">56</button><button class="count-option" data-count-choice="100" aria-pressed="false">100</button>
-    </div>
-    <div class="dock-group mode-group" role="group" aria-label="Cursor mode">
-      <span class="dock-label">MODE</span><button class="mode-option selected" data-mode-choice="collab" aria-pressed="true">COLLAB</button><button class="mode-option" data-mode-choice="wireframe" aria-pressed="false">WIREFRAME</button><button class="mode-option" data-mode-choice="follow" aria-pressed="false">FOLLOW</button>
-    </div>
-    <button class="dock-button sound-toggle" id="sound-toggle" type="button" aria-pressed="false">◖ <span>SOUND OFF</span></button>
-    <button class="dock-button" id="motion-mode" type="button" aria-pressed="false" title="Toggle reduced motion">◌ <span>MOTION FULL</span></button>
-    <!-- DEV_ONLY_START:PROFILE_EDITOR -->
-    <button class="dock-button" id="inspect-toggle" type="button" aria-expanded="false" aria-controls="inspect-drawer">✎ <span>CUSTOMIZE</span></button>
-    <!-- DEV_ONLY_END:PROFILE_EDITOR -->
-    <span class="dock-phase" id="dock-phase">PHASE 0 / VOID</span>
-    <span class="dock-sim">SIMULATION / NO AI CONNECTED</span>
-  </div>
   <!-- DEV_ONLY_START:PROFILE_EDITOR -->
+  <button id="inspect-toggle" type="button" aria-expanded="false" aria-controls="inspect-drawer" hidden>CUSTOMIZE</button>
   <aside class="inspect-drawer" id="inspect-drawer" aria-label="Customize portfolio profile" hidden>
     <div class="drawer-head"><div><span class="mono">INSPECT / PROFILE</span><h2>Live content edit</h2></div><button id="inspect-close" class="drawer-close" aria-label="Close customize drawer">×</button></div>
     <p>Edits update the portfolio and replay its construction.</p>
